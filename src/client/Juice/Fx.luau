@@ -60,7 +60,7 @@ function Fx.init(parentWorld: Instance, gui: ScreenGui)
 	for i = 1, NUMBER_COUNT do
 		local bb = Instance.new("BillboardGui")
 		bb.Size = UDim2.fromOffset(160, 70)
-		bb.AlwaysOnTop = true
+		bb.AlwaysOnTop = false -- AlwaysOnTop billboards failed to render in Studio play tests
 		bb.LightInfluence = 0
 		bb.Enabled = false
 		bb.Name = "DamageNumber"
@@ -111,7 +111,8 @@ function Fx.number(pos: Vector3, text: string, color: Color3, magnitude: number)
 	local label = bb:FindFirstChild("Text") :: TextLabel
 	local scale = label:FindFirstChildOfClass("UIScale") :: UIScale
 	bb.Adornee = sparkHost
-	bb.StudsOffsetWorldSpace = pos - sparkHost.Position
+	-- Nudged toward the camera so pegs and the board never hide the number.
+	bb.StudsOffsetWorldSpace = pos - sparkHost.Position + Vector3.new(0, 0, 1.5)
 	bb.Enabled = true
 	label.Text = text
 	label.TextColor3 = color
@@ -188,6 +189,51 @@ function Fx.ring(pos: Vector3, color: Color3, radius: number, duration: number?)
 	TweenService:Create(d, TweenInfo.new(t, Enum.EasingStyle.Quad), { Size = Vector3.new(0.06, radius * 2, radius * 2), Transparency = 1 }):Play()
 	task.delay(t + 0.05, function()
 		d:Destroy()
+	end)
+end
+
+-- Strike bolt: a glowing orb with a trail flies from a hero's weapon to the
+-- monster on a shallow arc, then calls onArrive.
+function Fx.bolt(from: Vector3, to: Vector3, color: Color3, duration: number, onArrive: (() -> ())?)
+	local orb = Build.ball(worldRoot, 0.9, from, color, { material = Enum.Material.Neon })
+	local core = Build.ball(worldRoot, 0.45, from, Color3.new(1, 1, 1), { material = Enum.Material.Neon })
+	local a0 = Instance.new("Attachment")
+	a0.Position = Vector3.new(0, 0.35, 0)
+	a0.Parent = orb
+	local a1 = Instance.new("Attachment")
+	a1.Position = Vector3.new(0, -0.35, 0)
+	a1.Parent = orb
+	local trail = Instance.new("Trail")
+	trail.Attachment0 = a0
+	trail.Attachment1 = a1
+	trail.Lifetime = 0.25
+	trail.FaceCamera = true
+	trail.LightEmission = 1
+	trail.Color = ColorSequence.new(color, Color3.new(1, 1, 1))
+	trail.Transparency = NumberSequence.new(0.1, 1)
+	trail.Parent = orb
+	local light = Instance.new("PointLight")
+	light.Color = color
+	light.Brightness = 2
+	light.Range = 8
+	light.Parent = orb
+	local t0 = os.clock()
+	local d = math.max(0.05, if reduced then duration * 0.6 else duration)
+	local conn: RBXScriptConnection
+	conn = RunService.RenderStepped:Connect(function()
+		local u = math.clamp((os.clock() - t0) / d, 0, 1)
+		local p = from:Lerp(to, u) + Vector3.new(0, math.sin(u * math.pi) * 2.2, 0)
+		orb.CFrame = CFrame.new(p)
+		core.CFrame = CFrame.new(p)
+		if u >= 1 then
+			conn:Disconnect()
+			orb:Destroy()
+			core:Destroy()
+			Fx.ring(to, color, 3.5, 0.3)
+			if onArrive then
+				onArrive()
+			end
+		end
 	end)
 end
 

@@ -14,7 +14,7 @@ local Config = require(Shared.Config)
 local Boards = require(Shared.Content.Boards)
 local Balls = require(Shared.Content.Balls)
 local Enemies = require(Shared.Content.Enemies)
-local Route = require(Shared.Content.Route)
+local Campaigns = require(Shared.Content.Campaigns)
 local Cosmetics = require(Shared.Content.Cosmetics)
 local Pegs = require(Shared.Content.Pegs)
 local Shot = require(Shared.Sim.Shot)
@@ -24,9 +24,12 @@ local AimMath = require(Shared.Sim.Aim)
 
 local Net = require(script.Parent.State.Net)
 local Layout = require(script.Parent.World.Layout)
-local WorkshopScene = require(script.Parent.World.Workshop)
+local LobbyHall = require(script.Parent.World.LobbyHall)
+local Scenery = require(script.Parent.World.Scenery)
 local Cabinet = require(script.Parent.World.Cabinet)
 local Monster = require(script.Parent.World.Monster)
+local Hero = require(script.Parent.World.Hero)
+local Gallery = require(script.Parent.World.Gallery)
 local Board = require(script.Parent.BoardView.Board)
 local ShotPlayer = require(script.Parent.BoardView.ShotPlayer)
 local Guide = require(script.Parent.BoardView.Guide)
@@ -38,7 +41,8 @@ local Kit = require(script.Parent.UI.Kit)
 local Hud = require(script.Parent.UI.Hud)
 local Screens = require(script.Parent.UI.Screens)
 local Teammates = require(script.Parent.UI.Teammates)
-local WorkshopMenu = require(script.Parent.UI.WorkshopMenu)
+local LobbyMenu = require(script.Parent.UI.LobbyMenu)
+local MapScreen = require(script.Parent.UI.MapScreen)
 local Director = require(script.Parent.Cutscenes.Director)
 
 local C = Theme.Color
@@ -57,7 +61,15 @@ local monsterEncId = ""
 local guide: Guide.Guide
 local hud: Hud.Hud
 local teammates: Teammates.Teammates
-local menu: WorkshopMenu.Menu
+local menu: LobbyMenu.Menu
+local hall: LobbyHall.Handles
+local heroes: { [number]: Hero.Hero } = {}
+local lobbyHeroes: { [number]: Hero.Hero } = {}
+local heroFolder: Folder
+local mapView: MapScreen.View? = nil
+local restModal: Screens.Rest? = nil
+local restOpenFor = ""
+local bank: { [number]: number } = {}
 
 -- Replicated state
 local profile: { [string]: any } = {}
@@ -66,7 +78,7 @@ local encSnap: { [string]: any }? = nil
 local snapTime = 0
 local lastRunState = ""
 local lastEncId = ""
-local lobby: { any } = {}
+local lobby: { [string]: any } = {}
 
 -- Local play state
 local selectedSlot = 1
@@ -129,12 +141,32 @@ local function markSeen(id: string)
 	Net.send("seenCutscene", { id = id })
 end
 
-local function legPalette(index: number): Cabinet.Palette
-	local li = 1
-	if runSnap and (runSnap :: any).mode == "normal" then
-		li = Route.at(math.clamp(index, 1, Route.count()))
+local function actOf(run: { [string]: any }?): Campaigns.Act
+	local camp = Campaigns.ById[if run then run.campaign or Campaigns.DEFAULT else Campaigns.DEFAULT] or Campaigns.ById[Campaigns.DEFAULT]
+	local idx = if run then math.clamp(run.act or 1, 1, #camp.acts) else 1
+	return camp.acts[idx]
+end
+
+local function legPalette(_index: number?): Cabinet.Palette
+	local p = actOf(runSnap).palette
+	return { frame = p.deep, trim = Color3.fromRGB(214, 160, 70), back = p.deep, glow = p.glow }
+end
+
+-- Seat (1-based) of a player in the run, for their colour.
+local function seatOf(uid: number): number
+	local run = runSnap
+	if run then
+		for i, m in (run :: any).members do
+			if m.uid == uid then
+				return i
+			end
+		end
 	end
-	return Route.Legs[li].palette
+	return 1
+end
+
+local function heroOf(uid: number): Hero.Hero?
+	return heroes[uid]
 end
 
 local function trailColors(): (Color3, Color3)
@@ -170,11 +202,15 @@ local function setMonster(enemyId: string?, encId: string)
 		m:hide()
 		monster = m
 		monsterEncId = encId
+		local def = Enemies.ById[enemyId]
+		if hud and def then
+			hud:setEnemyPortrait(def.look.model)
+		end
 	end
 end
 
--- Prediction display: monster HP = server HP minus damage we have shown but
--- the server has not yet applied (it applies hits at their earned time).
+-- Prediction display: monster HP = server HP minus strikes that have landed
+-- on screen but are not yet in the latest server snapshot.
 local function displayedEnemyHp(): (number, number)
 	if encSnap == nil then
 		return 0, 0
@@ -182,8 +218,9 @@ local function displayedEnemyHp(): (number, number)
 	local hp = (encSnap :: any).hp
 	local armor = (encSnap :: any).armor
 	local pending = 0
+	local now = serverNow()
 	for _, v in visualHits do
-		if v.t > snapTime then
+		if v.t > snapTime and v.t <= now then
 			pending += v.dmg
 		end
 	end
@@ -221,14 +258,16 @@ local function onBoardHit(hit: Scoring.Hit, sp: ShotPlayer.ShotPlayer?, isMine: 
 	Audio.play("peg", { pitch = pitch })
 	if hit.damage > 0 then
 		local color = if hit.bonus > 0 then C.purple elseif hit.big then C.gold else C.text
-		Fx.number(pos + Vector3.new(0, 0.6, 1.2), tostring(hit.damage), color, hit.damage)
-		local m = monster
-		if m then
-			m:hit(hit.damage, hit.big)
-		end
+		Fx.number(pos + Vector3.new(0, 0.6, 1.2), tostring(hit.damage), color, hit.damage * 0.8)
+		-- Damage gathers on your hero; it strikes when the ball drains.
 		if isMine then
-			table.insert(visualHits, { t = serverT, dmg = hit.damage })
+			bank[myUid] = (bank[myUid] or 0) + hit.damage
+			local h = heroOf(myUid)
+			if h then
+				h:bank(bank[myUid])
+			end
 		end
+		local _ = serverT
 		if hit.big then
 			Audio.play("bigHit", { pitch = 1 + math.min(hit.damage, 40) / 80 })
 			cabinet:shakeFrame(math.min(0.45, 0.12 + hit.damage / 80))
@@ -265,9 +304,14 @@ local function onBoardHit(hit: Scoring.Hit, sp: ShotPlayer.ShotPlayer?, isMine: 
 				to = first
 			end
 		end
-		Fx.callout(if to == myUid then "RELAY CHARGED!" else `RELAY → {string.upper(playerName(to))}!`, C.purple, 1)
+		Fx.callout(if to == myUid then "EMPOWERED!" else `EMPOWER → {string.upper(playerName(to))}!`, C.purple, 1)
 		Audio.play("chargeSend")
-		local target = if to == myUid then hud:chargeSlotScreenPos() else (teammates:screenPos(to) or hud:chargeSlotScreenPos())
+		local mine = heroOf(myUid)
+		if mine then
+mine:castSupport()
+		end
+		local toHero = heroOf(to)
+		local target = if to == myUid then hud:chargeSlotScreenPos() elseif toHero then Fx.toScreen(toHero:headPosition()) else (teammates:screenPos(to) or hud:chargeSlotScreenPos())
 		Fx.arc(Fx.toScreen(pos), target, C.purple, 0.55, function()
 			Audio.play("chargeArrive")
 		end)
@@ -275,6 +319,52 @@ local function onBoardHit(hit: Scoring.Hit, sp: ShotPlayer.ShotPlayer?, isMine: 
 	if isMine and (hit.combo == 5 or hit.combo == 10 or hit.combo == 15 or hit.combo == 20 or hit.combo == 30 or hit.combo == 40) then
 		Fx.callout(`{hit.combo} PEG COMBO!`, if hit.combo >= 20 then C.pink elseif hit.combo >= 10 then C.gold else C.cyan, 0.9 + math.min(hit.combo, 30) / 60)
 	end
+end
+
+-- Hero strikes: the shot's damage leaves the hero's weapon as a bolt and
+-- lands on the monster at the moment the server applies it.
+local function scheduleStrike(uid: number, total: number, impactT: number)
+	if total <= 0 then
+		return
+	end
+	table.insert(visualHits, { t = impactT, dmg = total })
+	local delayTime = impactT - serverNow()
+	local travel = 0.18
+	local wind = 0.26
+	task.delay(math.max(0, delayTime - travel - wind), function()
+		local h = heroOf(uid)
+		local color = Theme.slot(seatOf(uid))
+		local function launchBolt()
+			bank[uid] = 0
+			local m = monster
+			if m == nil or m.dead then
+				return
+			end
+			local from = if h then h:weaponPosition() else Layout.HERO_ANCHOR + Vector3.new(0, 3, 0)
+			local to = m:centerPosition()
+			Audio.play("whoosh", { pitch = 1.3 })
+			Fx.bolt(from, to, color, travel, function()
+				local mm = monster
+				if mm == nil or mm.dead then
+					return
+				end
+				local big = total >= 30
+				mm:hit(total, big)
+				Fx.number(to + Vector3.new((math.random() - 0.5) * 2, 1 + math.random(), 2.5), tostring(total), color, total * 1.6)
+				Fx.sparks(to, color, if big then 20 else 10)
+				Audio.play("bigHit", { pitch = 1.25 - math.min(total, 80) / 160 })
+				Scenery.pulse(math.min(1.5, total / 40))
+				if big then
+					cabinet:shakeFrame(math.min(0.4, total / 120))
+				end
+			end)
+		end
+		if h then
+			h:strike(wind, launchBolt)
+		else
+			task.delay(wind, launchBolt)
+		end
+	end)
 end
 
 -- HUD refresh -------------------------------------------------------------
@@ -324,20 +414,146 @@ local function canLaunch(): boolean
 	return cd <= 0
 end
 
+-- Party heroes on the battlefield follow the encounter's roster.
+local function syncHeroes()
+	local enc = encSnap
+	local run = runSnap
+	local want: { [number]: { [string]: any } } = {}
+	local count = 0
+	if enc and run and not practice then
+		for _, tp in (enc :: any).players do
+			if tp.present then
+				want[tp.uid] = tp
+				count += 1
+			end
+		end
+	elseif run and not practice and (run :: any).state ~= "finished" then
+		-- Between fights the party still stands on the field.
+		for _, m in (run :: any).members do
+			if m.status == "active" then
+				want[m.uid] = { uid = m.uid, hull = m.hull, maxHull = m.maxHull, shield = 0, defeated = false, active = true, present = true }
+				count += 1
+			end
+		end
+	end
+	for uid, h in heroes do
+		if want[uid] == nil then
+			h:destroy()
+			heroes[uid] = nil
+		end
+	end
+	if count == 0 then
+		return
+	end
+	-- Seats in run order, so colours match the party list everywhere.
+	local seatIdx = 0
+	for _, m in (run :: any).members do
+		local tp = want[m.uid]
+		if tp then
+			seatIdx += 1
+			local seat = seatOf(m.uid)
+			local spot = Layout.heroSpot(seatIdx, count)
+			local existing: Hero.Hero? = heroes[m.uid]
+			local h: Hero.Hero
+			if existing == nil then
+				h = Hero.new(heroFolder, m.uid, m.kit, Theme.slot(seat), spot, Layout.HERO_FACING)
+				h.reducedMotion = settingsState.reducedMotion
+				heroes[m.uid] = h
+			else
+				h = existing
+				h:setSpot(spot, Layout.HERO_FACING)
+			end
+			h:setVitals(tp.hull, tp.maxHull, tp.shield, tp.defeated, not tp.active)
+		end
+	end
+end
+
+local function clearHeroes(set: { [number]: Hero.Hero })
+	for uid, h in set do
+		h:destroy()
+		set[uid] = nil
+	end
+end
+
+-- Lobby: you (and your party) stand on the dais.
+local function syncLobbyHeroes()
+	local party = lobby.party
+	local list: { { uid: number, kit: string } } = {}
+	if party then
+		for _, m in party.members do
+			table.insert(list, { uid = m.uid, kit = m.kit or "ricochet" })
+		end
+	else
+		table.insert(list, { uid = myUid, kit = menu.choices.kit })
+	end
+	local keep: { [number]: boolean } = {}
+	for i, e in list do
+		keep[e.uid] = true
+		local h: Hero.Hero? = lobbyHeroes[e.uid]
+		if h and h.kit ~= e.kit then
+			h:destroy()
+			lobbyHeroes[e.uid] = nil
+			h = nil
+		end
+		local spot = hall.spots[math.clamp(i, 1, #hall.spots)]
+		if h == nil then
+			local nh = Hero.new(heroFolder, e.uid, e.kit, Theme.slot(i), spot, hall.facing)
+			nh.reducedMotion = settingsState.reducedMotion
+			lobbyHeroes[e.uid] = nh
+		else
+			h:setSpot(spot, hall.facing)
+		end
+	end
+	for uid, h in lobbyHeroes do
+		if not keep[uid] then
+			h:destroy()
+			lobbyHeroes[uid] = nil
+		end
+	end
+end
+
+local function nodeStep(run: { [string]: any }): (number, number)
+	local cur = run.current
+	if cur == nil then
+		return 1, 4
+	end
+	if cur.kind == "boss" then
+		return 4, 4
+	end
+	local row = tonumber(string.match(cur.id or "", "r(%d+)")) or 1
+	return row, 4
+end
+
 local function refreshHud()
 	local run = runSnap
 	local enc = encSnap
 	if run == nil then
 		return
 	end
-	hud:setProgress((run :: any).index, (run :: any).total)
+	local act = actOf(run)
+	local step, steps = nodeStep(run :: any)
+	if (run :: any).mode == "test" then
+		hud:setProgress(1, 1, "Developer test")
+	else
+		hud:setProgress(step, steps, `{act.subtitle} · {act.name}`)
+	end
+	syncHeroes()
 	local mm = myMember()
 	local p = myEncPlayer()
 	if enc and p then
 		local def = Enemies.ById[(enc :: any).enemyId]
 		local hp, armor = displayedEnemyHp()
-		local phaseLabel = if (enc :: any).bossPhase > 0 and def.phases then def.phases[(enc :: any).bossPhase].label else (if def.boss then "BOSS" else "")
+		local cur = (run :: any).current
+		local elite = cur and cur.kind == "elite"
+		local phaseLabel = if (enc :: any).bossPhase > 0 and def.phases then def.phases[(enc :: any).bossPhase].label else (if def.boss then "BOSS" elseif elite then "ELITE" else "")
 		hud:setEnemy(def.name, hp, (enc :: any).maxHp, armor, phaseLabel)
+		local contrib: { Hud.Contribution } = {}
+		for _, tp in (enc :: any).players do
+			if tp.present then
+				table.insert(contrib, { uid = tp.uid, name = if tp.uid == myUid then "You" else playerName(tp.uid), seat = seatOf(tp.uid), damage = tp.damage or 0 })
+			end
+		end
+		hud:setContribution(contrib, hp, (enc :: any).maxHp)
 		local status = ""
 		if p.defeated then
 			status = "Knocked out — watching until this fight ends."
@@ -419,7 +635,7 @@ local function startLocalShot(aim: number, slot: number, loadout: Scoring.Loadou
 		onEnd = function()
 			local total = result.outcome.totals
 			if total.damage > 0 then
-				Fx.callout(`SHOT {total.damage}`, if total.damage >= 60 then C.gold else C.text, 0.85)
+				Fx.callout(`STRIKE {total.damage}`, if total.damage >= 60 then C.gold else C.text, 0.85)
 			end
 			if total.pegsHit <= 4 then
 				lowShots += 1
@@ -430,6 +646,10 @@ local function startLocalShot(aim: number, slot: number, loadout: Scoring.Loadou
 		end,
 	})
 	shotPlayer = sp
+	if not isPractice then
+bank[myUid] = 0
+scheduleStrike(myUid, result.outcome.totals.damage, serverStart + result.sim.steps / Config.Sim.STEP_HZ + Config.Combat.STRIKE_DELAY)
+	end
 	-- Launch feel: barrel recoil, muzzle sparks, frame kick.
 	cabinet:kick(1)
 	cabinet:shakeFrame(0.08)
@@ -524,25 +744,38 @@ local function teammateShot(ev: { [string]: any })
 	local result = Shot.resolve({ boardId = ev.boardId, boardRev = ev.boardRev, aim = ev.aim, loadout = ev.loadout })
 	local offset = math.max(0, serverNow() - ev.startAt)
 	teammates:play(ev.uid, result.sim, result.outcome.hits, offset)
+	local uid = ev.uid
+	bank[uid] = 0
+	-- Their damage gathers over their hero as their ball earns it.
 	for _, h in result.outcome.hits do
 		local t = ev.startAt + h.step / Config.Sim.STEP_HZ
 		local delayTime = t - serverNow()
 		if delayTime >= -0.05 and h.damage > 0 then
-			table.insert(visualHits, { t = t, dmg = h.damage })
 			task.delay(math.max(0, delayTime), function()
-				local m = monster
-				if m then
-					m:hit(h.damage, h.big)
-					Fx.number(m:centerPosition() + Vector3.new((math.random() - 0.5) * 4, (math.random() - 0.2) * 3, 2), tostring(h.damage), if h.bonus > 0 then C.purple else C.textDim, h.damage * 0.7)
+				bank[uid] = (bank[uid] or 0) + h.damage
+				local hero = heroOf(uid)
+				if hero then
+					hero:bank(bank[uid])
+				end
+			end)
+		end
+		if h.charge then
+			task.delay(math.max(0, delayTime), function()
+				local hero = heroOf(uid)
+				if hero then
+					hero:castSupport()
 				end
 			end)
 		end
 	end
+	scheduleStrike(uid, result.outcome.totals.damage, ev.startAt + result.sim.steps / Config.Sim.STEP_HZ + Config.Combat.STRIKE_DELAY)
 end
 
 -- Encounters, cutscenes, and run flow ---------------------------------------
 
 local function enterFightView()
+	clearHeroes(lobbyHeroes)
+	Director.toFight()
 	menu.show(false)
 	hud:setVisible(true)
 	AimInput.setEnabled(true)
@@ -564,11 +797,10 @@ local function setupEncounter(run: { [string]: any }, enc: { [string]: any }, in
 		endModal = nil
 	end
 	local pal = legPalette(run.index)
-	local legChanged = introEvent ~= nil and introEvent.legBeat == true
-	if not legChanged then
-		cabinet:setPalette(pal, false)
-	end
-	setBoard(enc.boardId, pal.trim)
+	local act = actOf(run)
+	Scenery.setScene(act.scene, act.palette)
+	cabinet:setPalette(pal, false)
+	setBoard(enc.boardId, act.palette.glow)
 	setMonster(enc.enemyId, enc.id)
 	visualHits = {}
 	pendingShots = {}
@@ -579,7 +811,8 @@ local function setupEncounter(run: { [string]: any }, enc: { [string]: any }, in
 	enterFightView()
 	local def = Enemies.ById[enc.enemyId]
 	local remaining = enc.startAt - serverNow()
-	local kind: "intro" | "fight" | "boss" | "leg" = if introEvent and introEvent.intro >= 3.9 and not def.boss and run.index == 1 then "intro" elseif def.boss then "boss" else "fight"
+	local kind: "intro" | "fight" | "boss" | "leg" = if introEvent and introEvent.intro >= 3.9 and not def.boss and run.index <= 1 then "intro" elseif def.boss then "boss" else "fight"
+	local elite = introEvent ~= nil and introEvent.elite == true
 	local cutId = "cut_" .. kind
 	local skippable = seen(cutId)
 	if remaining > 0.6 then
@@ -589,9 +822,9 @@ local function setupEncounter(run: { [string]: any }, enc: { [string]: any }, in
 			duration = math.min(5, remaining),
 			skippable = skippable,
 			autoSkip = skippable and settingsState.skipSeen,
-			title = string.upper(def.name),
+			title = (if elite then "ELITE · " else "") .. string.upper(def.name),
 			sub = def.blurb,
-			color = if def.boss then C.red else C.gold,
+			color = if def.boss or elite then C.red else C.gold,
 			monsterReveal = function(seconds)
 				local m = monster
 				if m then
@@ -602,9 +835,8 @@ local function setupEncounter(run: { [string]: any }, enc: { [string]: any }, in
 				local m = monster
 				return if m then m:headPosition() else Layout.MONSTER_BASE
 			end,
-			legTitle = if legChanged then string.upper(Route.Legs[Route.at(run.index)].name) else nil,
+			legTitle = nil,
 			onLegShift = function()
-				cabinet:setPalette(pal, true)
 				cabinet:cheer(1.5)
 			end,
 			onDone = function()
@@ -616,7 +848,7 @@ local function setupEncounter(run: { [string]: any }, enc: { [string]: any }, in
 				if not seen("tip_aim") then
 					markSeen("tip_aim")
 					local touch = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
-					Screens.tip(if touch then "Drag on the board to aim. The dotted line shows your first bounce." else "Move your mouse to aim. The dotted line shows your first bounce.", UDim2.fromScale(0.36, 0.55))
+					Screens.tip(if touch then "Drag on the board to aim. Every peg your ball hits powers your hero's strike." else "Aim with the mouse. Every peg your ball hits powers your hero's strike.", UDim2.fromScale(0.52, 0.36))
 				end
 			end,
 		})
@@ -631,13 +863,31 @@ local function setupEncounter(run: { [string]: any }, enc: { [string]: any }, in
 	refreshHud()
 end
 
+local function closeMap()
+	if mapView then
+		(mapView :: MapScreen.View).close()
+		mapView = nil
+	end
+end
+
+local function closeRest()
+	if restModal then
+		(restModal :: Screens.Rest).modal.close()
+		restModal = nil
+		restOpenFor = ""
+	end
+end
+
 local function backToWorkshop()
 	if draftModal then
 		(draftModal :: Screens.Draft).modal.close()
 		draftModal = nil
 	end
+	closeMap()
+	closeRest()
 	closeWaiting()
 	setMonster(nil, "")
+	clearHeroes(heroes)
 	hud:setVisible(false)
 	AimInput.setEnabled(false)
 	guide:setVisible(false)
@@ -646,17 +896,29 @@ local function backToWorkshop()
 	encSnap = nil
 	lastRunState = ""
 	lastEncId = ""
+	Scenery.applyLighting(actOf(nil).palette, "lobby")
 	Director.toWorkshop()
 	menu.show(true)
 	menu.setProfile(profile)
 	menu.setLobby(lobby)
+	syncLobbyHeroes()
 end
 
 local function showRunResults(run: { [string]: any })
 	local rows = {}
 	local squad = 0
-	for _, m in run.members do
-		table.insert(rows, { name = if m.uid == myUid then "You" else playerName(m.uid), damage = m.stats.damage, biggest = m.stats.biggestShot, sent = m.stats.chargesSent, used = m.stats.chargesUsed })
+	for i, m in run.members do
+		table.insert(rows, {
+			name = if m.uid == myUid then "You" else playerName(m.uid),
+			seat = i,
+			damage = m.stats.damage,
+			biggest = m.stats.biggestShot,
+			sent = m.stats.chargesSent,
+			used = m.stats.chargesUsed,
+			guarded = m.stats.guarded,
+			mended = m.stats.mended,
+			blocked = m.stats.blocked,
+		})
 		squad += m.stats.damage
 	end
 	local minutes = (serverNow() - run.startedAt) / 60
@@ -677,7 +939,7 @@ local function showRunResults(run: { [string]: any })
 		)
 		return
 	end
-	endModal = Screens.results("RUN COMPLETE!", rows, squad, minutes, "REMATCH (FREE)", function()
+	endModal = Screens.results("THE ABYSS IS CONQUERED", rows, squad, minutes, "DESCEND AGAIN", function()
 		Net.send("rematch")
 	end, function()
 		Net.send("leaveRun")
@@ -705,8 +967,8 @@ local function onDraft(payload: { [string]: any })
 	end
 	draftOpenFor = key
 	AimInput.setEnabled(false)
-	local _, _nodeIdx, node = Route.at(math.min((run :: any).index + 1, Route.count()))
-	local title = `Next: fight {(run :: any).index + 1} of 9{if node.boss then " · BOSS" else ""}`
+	local dk = (run :: any).draftKind
+	local title = if dk == "treasure" then "A relic cache: take one" elseif dk == "elite" then `Elite spoils: +{Config.Combat.ELITE_SPOILS_MAX_HULL} max health for everyone` elseif dk == "boss" then "The boss falls. Choose, then the next act begins." else "Victory: choose a reward"
 	draftModal = Screens.draft(payload.offer, rack, payload.rerolls, payload.fallback, title, function(choice, slot)
 		Net.send("pick", { choice = choice, slot = slot })
 		if draftModal then
@@ -718,6 +980,58 @@ local function onDraft(payload: { [string]: any })
 	local d = draftModal :: Screens.Draft
 	d.setDeadline(payload.deadline, serverNow())
 	d.setPicked(payload.picked)
+end
+
+local function updateMapAndRest(run: { [string]: any })
+	local st = run.state
+	if st == "map" then
+		if mapView == nil then
+			AimInput.setEnabled(false)
+			guide:setVisible(false)
+			enterFightView()
+			AimInput.setEnabled(false)
+			Scenery.setScene(actOf(run).scene, actOf(run).palette)
+			cabinet:setPalette(legPalette(), false)
+			mapView = MapScreen.open(hud.root.Parent :: Instance, function(nodeId)
+				Net.send("vote", { nodeId = nodeId })
+			end)
+		end
+		(mapView :: MapScreen.View).update(run, serverNow())
+	elseif mapView then
+		closeMap()
+	end
+	if st == "rest" then
+		local key = `{run.id}:{run.index}`
+		local mm = myMember()
+		if restModal == nil or restOpenFor ~= key then
+			closeRest()
+			restOpenFor = key
+			AimInput.setEnabled(false)
+			local heal = if mm then math.floor(mm.maxHull * Config.Combat.REST_HEAL_FRACTION + 0.5) else 0
+			if mm then
+				heal = math.min(heal, mm.maxHull - mm.hull)
+			end
+			restModal = Screens.rest(if mm then mm.rack else { "basic" }, heal, function()
+				Net.send("rest", { choice = "heal" })
+			end, function(slot)
+				Net.send("rest", { choice = "train", slot = slot })
+			end)
+		end
+		local rm = restModal :: Screens.Rest
+		rm.setDeadline(run.stateEndsAt, serverNow())
+		local waitingOn = {}
+		for _, m in run.members do
+			if m.status == "active" and m.restChoice == nil then
+				table.insert(waitingOn, if m.uid == myUid then "you" else playerName(m.uid))
+			end
+			if m.uid == myUid then
+				rm.setChosen(m.restChoice ~= nil)
+			end
+		end
+		rm.setStatus(if #waitingOn > 0 then "Waiting for " .. table.concat(waitingOn, ", ") else "Everyone has chosen.")
+	elseif restModal then
+		closeRest()
+	end
 end
 
 local function onRunStateChanged(run: { [string]: any }, prev: string)
@@ -774,7 +1088,7 @@ local function onState(payload: { [string]: any })
 			waiting = Screens.waiting(function()
 				Net.send("leaveRun")
 				task.delay(0.3, function()
-					Net.send("startRun", { kit = menu.choices.kit, modifiers = {}, families = {}, privacy = "friends" })
+					Net.send("startRun", { kit = menu.choices.kit, modifiers = {}, families = {}, privacy = "friends", campaign = menu.choices.campaign })
 				end)
 			end)
 			practice = true
@@ -801,6 +1115,7 @@ local function onState(payload: { [string]: any })
 		lastRunState = run.state
 		onRunStateChanged(run, prev)
 	end
+	updateMapAndRest(run)
 	-- Defeat → a quiet banner (watching).
 	local p = myEncPlayer()
 	if p and prevEnc then
@@ -825,7 +1140,17 @@ local function onEvents(list: { { [string]: any } })
 			end
 			Audio.play("telegraph", { pitch = 1.1 })
 		elseif t == "threatHit" then
+			local m = monster
 			for _, r in ev.results do
+				local h = heroOf(r.uid)
+				if h then
+					if r.hull > 0 then
+						h:hit()
+					end
+					if m and not m.dead then
+						Fx.bolt(m:centerPosition(), h:headPosition() - Vector3.new(0, 1.5, 0), if r.hull > 0 then C.threat else C.shield, 0.2, nil)
+					end
+				end
 				if r.uid == myUid then
 					if r.blocked > 0 then
 						Audio.play("shieldBlock")
@@ -859,8 +1184,9 @@ local function onEvents(list: { { [string]: any } })
 		elseif t == "won" then
 			local m = monster
 			if m then
-				Fx.confetti(m:centerPosition(), { C.gold, C.pink, C.cyan, C.green })
-				Fx.ring(m:centerPosition(), Color3.new(1, 1, 1), 9, 0.5)
+				Fx.confetti(m:centerPosition(), { C.gold, C.pink, C.cyan, C.purple })
+				Fx.ring(m:centerPosition(), C.purple, 10, 0.6)
+				Scenery.pulse(2)
 				m:die()
 				monster = nil
 			end
@@ -870,8 +1196,21 @@ local function onEvents(list: { { [string]: any } })
 			end)
 			cabinet:cheer(2.5)
 		elseif t == "encounterWon" then
+			-- Victory line names everyone's share of the damage.
+			local parts = {}
+			local total = 0
+			for _, st in ev.perPlayer or {} do
+				total += st.damage
+			end
+			local count = 0
+			for uid, st in ev.perPlayer or {} do
+				count += 1
+				local pct = if total > 0 then math.floor(st.damage / total * 100 + 0.5) else 0
+				table.insert(parts, `{if uid == myUid then "You" else playerName(uid)} {pct}%`)
+			end
 			local mine = ev.perPlayer and ev.perPlayer[myUid]
-			hud:showBanner(if ev.boss then "BOSS DOWN!" else "MONSTER DOWN!", if mine then `Your biggest shot: {mine.biggestShot}` else nil, C.gold, 1.6)
+			local sub = if count > 1 then table.concat(parts, " · ") elseif mine then `Your best strike: {mine.biggestShot}` else nil
+			hud:showBanner(if ev.boss then "THE BOSS FALLS" elseif ev.elite then "ELITE SLAIN" else "VICTORY", sub, C.gold, 1.8)
 		elseif t == "lost" then
 			Audio.play("defeat")
 		elseif t == "chargeSent" then
@@ -915,11 +1254,27 @@ local function onEvents(list: { { [string]: any } })
 			Screens.notice(`{playerName(ev.uid)} disconnected — their seat is held for 60 s.`)
 		elseif t == "admitted" and ev.uid == myUid then
 			closeWaiting()
-			Screens.notice("You're in! Joining at the next fight.", C.greenDeep)
+			Screens.notice("You're in! You join the party at this break.", C.greenDeep)
 		elseif t == "admitted" then
 			Screens.notice(`{playerName(ev.uid)} joined the party!`, C.greenDeep)
 		elseif t == "draftFallback" and ev.uid == myUid then
-			Screens.notice("Time ran out — repaired 8 hull instead.")
+			Screens.notice(`Time ran out, so you repaired 8 health instead.`)
+		elseif t == "eliteSpoils" then
+			Screens.notice(`Elite spoils: +{ev.maxHull} max health for every hero!`, C.goldDeep)
+		elseif t == "actStart" then
+			local camp = Campaigns.ById[if runSnap then (runSnap :: any).campaign else Campaigns.DEFAULT]
+			local act = if camp then camp.acts[ev.act] else nil
+			if act then
+				hud:showBanner(string.upper(act.name), act.subtitle, act.palette.accent, 2.4)
+			end
+		elseif t == "rested" and ev.uid == myUid then
+			if ev.choice == "train" then
+				Screens.notice("Trained: +1 damage per hit for that ball.", C.goldDeep)
+			else
+				Screens.notice(`Rested: +{ev.amount} health.`, C.greenDeep)
+			end
+		elseif t == "pathChosen" then
+			Audio.play("whoosh", { pitch = 0.8 })
 		end
 	end
 	refreshHud()
@@ -987,8 +1342,33 @@ local function applySettings(s: { [string]: any })
 	Audio.setVolumes(settingsState.sfx, settingsState.music)
 end
 
+-- Avatar copies arrive from the server a moment after joining: swap any
+-- stand-in hero for the real avatar once it exists.
+local lastHeroCheck = 0
+local function upgradeHeroes()
+	if os.clock() - lastHeroCheck < 0.5 then
+		return
+	end
+	lastHeroCheck = os.clock()
+	local folder = game:GetService("ReplicatedStorage"):FindFirstChild("HeroModels")
+	if folder == nil then
+		return
+	end
+	for _, set in { heroes, lobbyHeroes } do
+		for uid, h in set do
+			if h.fallback and folder:FindFirstChild(tostring(uid)) then
+				local nh = Hero.new(heroFolder, uid, h.kit, h.color, h.spot, h.facing)
+				nh.reducedMotion = h.reducedMotion
+				h:destroy()
+				set[uid] = nh
+			end
+		end
+	end
+end
+
 -- Per-frame upkeep: aim guide, threat telegraph, HP display.
 local function step(_dt: number)
+	upgradeHeroes()
 	local enc = encSnap
 	local now = serverNow()
 	local fighting = (enc ~= nil and runSnap ~= nil and (runSnap :: any).state == "fight") or practice
@@ -1028,7 +1408,7 @@ local function step(_dt: number)
 			end
 			if armed and secs < 9 and tel.kind ~= "armor" and not seen("tip_guard") and not shotPlayer and os.clock() > cutsceneUntil then
 				markSeen("tip_guard")
-				Screens.tip("A threat is coming! Hit blue square GUARD pegs to build shield before it lands.", UDim2.fromScale(0.36, 0.3), 6)
+				Screens.tip("The monster is winding up! Hit cyan square GUARD pegs to raise a shield before it lands.", UDim2.fromScale(0.36, 0.3), 6)
 			end
 		end
 		local hp, armor = displayedEnemyHp()
@@ -1044,7 +1424,7 @@ local function step(_dt: number)
 		end
 		if others > 0 and not seen("tip_relay") and os.clock() > cutsceneUntil and not shotPlayer and seen("tip_aim") then
 			markSeen("tip_relay")
-			Screens.tip("Purple RELAY rings power up your teammate's next shot. Damage now, or set them up?", UDim2.fromScale(0.36, 0.62), 7)
+			Screens.tip("Purple RELAY rings empower your ally's next strike. Hit hard now, or set them up?", UDim2.fromScale(0.36, 0.62), 7)
 		end
 		-- Optional guidance after repeated low-impact shots (no physics change).
 		if lowShots >= 2 and not seen("tip_dense") and not shotPlayer then
@@ -1071,9 +1451,16 @@ function Game.start(gui: ScreenGui, root: Frame)
 	Screens.init(gui, root)
 	Director.init(root)
 
-	WorkshopScene.build(worldRoot)
-	cabinet = Cabinet.new(worldRoot, Route.Legs[1].palette)
-	setBoard("warmup", Route.Legs[1].palette.trim)
+	Scenery.init(worldRoot)
+	local firstAct = actOf(nil)
+	Scenery.setScene(firstAct.scene, firstAct.palette)
+	Scenery.applyLighting(firstAct.palette, "lobby")
+	hall = LobbyHall.build(worldRoot)
+	heroFolder = Instance.new("Folder")
+	heroFolder.Name = "Heroes"
+	heroFolder.Parent = worldRoot
+	cabinet = Cabinet.new(worldRoot, legPalette())
+	setBoard("warmup", firstAct.palette.glow)
 	guide = Guide.new(worldRoot)
 	guide:setVisible(false)
 
@@ -1093,26 +1480,61 @@ function Game.start(gui: ScreenGui, root: Frame)
 		Net.send("setRecipient", { uid = uid })
 		Audio.play("click")
 	end)
-	menu = WorkshopMenu.new(root, {
-		onPlay = function(ch)
-			local mods = {}
-			for id, on in ch.modifiers do
-				if on then
-					table.insert(mods, id)
-				end
+	local function lists(ch: LobbyMenu.Choices): ({ string }, { string })
+		local mods = {}
+		for id, on in ch.modifiers do
+			if on then
+				table.insert(mods, id)
 			end
-			local fams = {}
-			for id, on in ch.families do
-				if on then
-					table.insert(fams, id)
-				end
+		end
+		local fams = {}
+		for id, on in ch.families do
+			if on then
+				table.insert(fams, id)
 			end
-			Net.send("startRun", { kit = ch.kit, modifiers = mods, families = fams, privacy = ch.privacy })
+		end
+		return mods, fams
+	end
+	local function openSettings()
+		local inRun = runSnap ~= nil
+		Screens.settings(settingsState, function(s)
+			applySettings(s)
+			Net.send("settings", { reducedMotion = s.reducedMotion, music = s.music, sfx = s.sfx, skipSeen = s.skipSeen })
+		end, if inRun then function()
+			Net.send("leaveRun")
+		end else nil)
+	end
+	menu = LobbyMenu.new(root, {
+		onSolo = function(ch)
+			local mods, fams = lists(ch)
+			Net.send("startRun", { kit = ch.kit, modifiers = mods, families = fams, privacy = ch.privacy, campaign = ch.campaign })
+		end,
+		onCreateParty = function(ch)
+			Net.send("createParty", { kit = ch.kit, campaign = ch.campaign, privacy = ch.privacy })
+		end,
+		onJoinParty = function(partyId, kit)
+			Net.send("joinParty", { partyId = partyId, kit = kit })
+		end,
+		onLeaveParty = function()
+			Net.send("leaveParty")
+		end,
+		onReady = function(ready)
+			Net.send("partyReady", { ready = ready })
+		end,
+		onStartParty = function(ch)
+			local mods, fams = lists(ch)
+			Net.send("startParty", { modifiers = mods, families = fams })
+		end,
+		onPartyKit = function(kit)
+			Net.send("partyKit", { kit = kit })
+		end,
+		onPartyCampaign = function(campaign)
+			Net.send("partyCampaign", { campaign = campaign })
 		end,
 		onContinue = function()
 			Net.send("continueRun")
 		end,
-		onJoin = function(runId, kit)
+		onJoinRun = function(runId, kit)
 			Net.send("joinRun", { runId = runId, kit = kit })
 		end,
 		onTrail = function(id)
@@ -1121,8 +1543,20 @@ function Game.start(gui: ScreenGui, root: Frame)
 		onDevTest = function(condition)
 			Net.send("devTest", { condition = condition })
 		end,
-		onKitPreview = function(_kitId)
+		onGallery = function()
+			menu.show(false)
+			clearHeroes(lobbyHeroes)
+			Director.toFight()
+			Gallery.start(worldRoot, root, function()
+				backToWorkshop()
+			end)
+		end,
+		onSettings = openSettings,
+		onClassPreview = function(_kitId)
 			Audio.play("click")
+			if runSnap == nil then
+				syncLobbyHeroes()
+			end
 		end,
 	})
 
@@ -1150,10 +1584,10 @@ function Game.start(gui: ScreenGui, root: Frame)
 		end
 		menu.setProfile(p)
 	end)
-	Net.on("lobby", function(list)
-		lobby = list
-		menu.setLobby(list)
-		if runSnap == nil then
+	Net.on("lobby", function(payload)
+		lobby = payload
+		menu.setLobby(payload)
+		if runSnap == nil and not Gallery.active() then
 			backToWorkshop()
 		end
 	end)

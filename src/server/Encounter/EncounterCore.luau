@@ -6,6 +6,8 @@
 -- Rules implemented here (plan §2/§3):
 --   * every accepted launch is simulated immediately from frozen inputs; its
 --     hits are scheduled at launch time + step/60 and applied when earned
+--     (shield, repair, charges); the shot's damage builds on the hero and is
+--     dealt in one strike STRIKE_DELAY after the ball drains
 --   * threats are announced with a countdown; shield absorbs first
 --   * Relay Charge: one generated per shot, one held, consumed by the next
 --     launch, never overwritten, returned to the sender if the recipient's
@@ -68,6 +70,9 @@ export type PlayerState = {
 	chargesUsed: number,
 	bonusDamage: number,
 	usefulHits: number,
+	guarded: number, -- shield gained (incl. from charges)
+	mended: number, -- hull repaired
+	blocked: number, -- threat damage absorbed by shield
 }
 
 export type LaunchRequest = {
@@ -98,7 +103,7 @@ export type ShotRecord = {
 type Pending = {
 	t: number,
 	order: number,
-	kind: "hit" | "threatHit" | "shotEnd",
+	kind: "hit" | "threatHit" | "shotEnd" | "strike",
 	shot: ShotRecord?,
 	hitIndex: number?,
 	damage: number?,
@@ -118,6 +123,8 @@ export type Params = {
 	modifiers: { [string]: boolean },
 	relayMode: "auto" | "self",
 	hpOverride: number?,
+	hpMult: number?, -- elite nodes
+	damageMult: number?, -- elite nodes: threat damage multiplier
 }
 
 local Encounter = {}
@@ -146,6 +153,7 @@ export type Encounter = typeof(setmetatable(
 		order: { number }, -- join order (stable iteration)
 		modifiers: { [string]: boolean },
 		relayMode: "auto" | "self",
+		damageMult: number,
 		queue: { Pending },
 		queueOrder: number,
 		shotCounter: number,
@@ -186,7 +194,8 @@ function Encounter.new(p: Params): Encounter
 	self.phase = "fight"
 	self.startAt = p.startAt
 	self.endAt = nil
-	self.soloHp = p.hpOverride or def.hp
+	self.soloHp = math.floor((p.hpOverride or def.hp) * (p.hpMult or 1) + 0.5)
+	self.damageMult = p.damageMult or 1
 	self.armor = 0
 	self.bossPhase = 0
 	self.cycle = def.cycle
@@ -247,6 +256,9 @@ function Encounter._addPlayer(self: Encounter, seed: PlayerSeed, now: number)
 		chargesUsed = 0,
 		bonusDamage = 0,
 		usefulHits = 0,
+		guarded = 0,
+		mended = 0,
+		blocked = 0,
 	}
 	self.players[seed.uid] = ps
 	table.insert(self.order, seed.uid)
@@ -456,6 +468,7 @@ function Encounter.launch(self: Encounter, uid: number, req: LaunchRequest, now:
 		schedule(self, { t = now + h.step * STEP_DT, order = 0, kind = "hit", shot = shot, hitIndex = i })
 	end
 	schedule(self, { t = shot.endAt, order = 0, kind = "shotEnd", shot = shot })
+	schedule(self, { t = shot.endAt + COMBAT.STRIKE_DELAY, order = 0, kind = "strike", shot = shot })
 
 	emit(self, {
 		type = "shotStarted",
@@ -556,10 +569,14 @@ local function applyHit(self: Encounter, shot: ShotRecord, index: number, t: num
 		end
 	end
 	if h.shield > 0 and ps and not ps.defeated then
+		local before = ps.shield
 		ps.shield = math.min(shieldCap(self), ps.shield + h.shield)
+		ps.guarded += ps.shield - before
 	end
 	if h.heal > 0 and ps and not ps.defeated then
+		local before = ps.hull
 		ps.hull = math.min(ps.maxHull, ps.hull + h.heal)
+		ps.mended += ps.hull - before
 	end
 	if h.bonus > 0 and ps then
 		ps.bonusDamage += h.bonus
@@ -567,15 +584,16 @@ local function applyHit(self: Encounter, shot: ShotRecord, index: number, t: num
 	if h.charge then
 		deliverCharge(self, shot, t)
 	end
-	if h.damage > 0 then
-		damageEnemy(self, h.damage, t, shot.uid)
-	end
+	-- Damage is banked on the hero and dealt by the strike (see tick).
 end
 
 local function threatDamage(self: Encounter, threat: Enemies.ThreatDef): number
 	local d = threat.damage
 	if threat.kind == "grow" then
 		d += (threat.growBy or 0) * self.growUses
+	end
+	if self.damageMult ~= 1 then
+		d = math.ceil(d * self.damageMult)
 	end
 	return d
 end
@@ -597,6 +615,7 @@ local function hitPlayers(self: Encounter, amount: number, pierce: number, t: nu
 			local rest = amount - pierced
 			local blocked = math.min(ps.shield, rest)
 			ps.shield -= blocked
+			ps.blocked += blocked
 			local toHull = rest - blocked + pierced
 			ps.hull -= toHull
 			-- Shield Spikes: blocked damage hits the monster back.
@@ -773,6 +792,12 @@ function Encounter.tick(self: Encounter, now: number)
 					ps.biggestShot = shot.damage
 				end
 				emit(self, { type = "shotEnded", shotId = shot.id, uid = shot.uid, damage = shot.damage })
+			elseif item.kind == "strike" then
+				local shot = item.shot :: ShotRecord
+				if self.phase == "fight" and shot.damage > 0 then
+					emit(self, { type = "strike", shotId = shot.id, uid = shot.uid, damage = shot.damage, t = item.t })
+					damageEnemy(self, shot.damage, item.t, shot.uid)
+				end
 			end
 		else
 			landThreat(self, self.nextThreatAt)
@@ -839,6 +864,14 @@ function Encounter.snapshot(self: Encounter): { [string]: any }
 			charge = if ps.charge then { id = ps.charge.id, from = ps.charge.from, power = ps.charge.power, hits = ps.charge.hits } else nil,
 			recipient = ps.recipient,
 			idleWarned = ps.idleWarned,
+			damage = ps.damage,
+			shots = ps.shots,
+			biggestShot = ps.biggestShot,
+			chargesSent = ps.chargesSent,
+			bonusDamage = ps.bonusDamage,
+			guarded = ps.guarded,
+			mended = ps.mended,
+			blocked = ps.blocked,
 		})
 	end
 	return {

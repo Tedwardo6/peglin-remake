@@ -24,7 +24,16 @@ export type Schema = { [string]: "int" | "number" | "string" | "bool" | "strlist
 -- Field schemas per request kind. Unknown kinds and unknown fields are rejected.
 Protocol.Requests = {
 	ready = { device = "string", reducedMotion = "bool" },
-	startRun = { kit = "string", modifiers = "strlist", families = "strlist", privacy = "string" },
+	startRun = { kit = "string", modifiers = "strlist", families = "strlist", privacy = "string", campaign = "string" },
+	createParty = { kit = "string", campaign = "string", privacy = "string" },
+	joinParty = { partyId = "string", kit = "string" },
+	leaveParty = {},
+	partyKit = { kit = "string" },
+	partyReady = { ready = "bool" },
+	partyCampaign = { campaign = "string" },
+	startParty = { modifiers = "strlist", families = "strlist" },
+	vote = { nodeId = "string" },
+	rest = { choice = "string", slot = "intOpt" },
 	continueRun = {},
 	launch = { seq = "int", slot = "int", aim = "aim", boardRev = "int", predicted = "string" },
 	activity = {},

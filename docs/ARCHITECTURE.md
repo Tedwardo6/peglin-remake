@@ -1,4 +1,4 @@
-# Architecture (feature/full-loop)
+# Architecture (feature/rpg-redesign)
 
 How the game is put together, where each rule lives, and how to change it safely. Design authority: `ideas/co-op-pegboard-adventure/research/2026-10-27-merged-multiplayer-proposal.md` in seawind-ideas (commit `54167c6`).
 
@@ -13,6 +13,21 @@ The server simulates every accepted launch; the client predicts its own shot wit
 5. Teammates receive the shot inputs (`shot` message) and re-simulate it on their mini board. No per-peg network traffic.
 
 Clients never send damage, hits, or results; `Protocol.validate` rejects any unknown field.
+
+### Hero strikes (RPG redesign)
+
+Each player has a hero on the battlefield (their own avatar). While a player's ball is in flight its damage is **banked** on their hero (the number above the hero's head). The server schedules a `strike` at `shot end + Config.Combat.STRIKE_DELAY` (0.55 s); that is when the damage lands on the monster and is recorded per player. The client plays the hero's lunge and a bolt timed to land at that moment, and the monster's HP bar only drops at impact. Guard (shield) and mend still apply when their peg is hit, so a guard hit before a threat's deadline counts even if the ball is still flying.
+
+Contribution is shown three ways: the banked number over each hero, coloured segments in the monster's HP bar (one colour per seat), and the results screen (damage share, shield given, repairs, empowers, MVP).
+
+## Run structure
+
+1. **Lobby hall.** Players land here (`ready` no longer starts a run by itself). They pick a hero class, a campaign, and either begin solo or form a party (`Lobby/PartyCore`: leader, members, kits, ready flags, privacy). The leader starts when everyone is ready.
+2. **Path map.** Each act is a deterministic map (`Sim/MapGen.generate(campaign, act, seed)`): an opener fight, a row of fight / elite / treasure, a row with a campfire and one other node, then the boss. The party votes on the next node; majority wins, the host breaks ties, and no votes takes the first choice. A solo player's forced step closes after `MAP_SINGLE_SECONDS`.
+3. **Nodes.** Fight and elite (elite: `ELITE_HP_MULT`, `ELITE_DAMAGE_MULT`, then a component reward or `ELITE_SPOILS_MAX_HULL`), treasure (a component-only draft), campfire (heal `REST_HEAL_FRACTION` of max health, or train one ball), boss (a draft, then the next act).
+4. Checkpoints store campaign, act and the current map node, so **Continue** resumes on the map.
+
+Campaigns and acts are data (`Content/Campaigns.luau`): one campaign, "The Dreaming Abyss", with three acts (Drowned Crypt, Floating Isle, Vortex Spire), each with its own monster pool, boards, boss and palette.
 
 ## Determinism
 
@@ -37,24 +52,28 @@ What the native option would still offer: no custom collision code to maintain. 
 | Area | Path | Notes |
 |---|---|---|
 | Tuning | `src/shared/Config.luau` | Every number is a hypothesis (H) from the plan |
-| Simulation | `src/shared/Sim/` | `Aim`, `Solver`, `Scoring`, `Shot` |
-| Content | `src/shared/Content/` | 7 peg types, 6 boards, 12 balls, 18 components, 3 kits, 9 monsters, route, 4 modifiers, 4 trails |
+| Simulation | `src/shared/Sim/` | `Aim`, `Solver`, `Scoring`, `Shot`, `MapGen`, `Rng` |
+| Content | `src/shared/Content/` | 7 peg types, 6 boards, 12 balls, 18 components, 3 hero classes, 10 monsters, 1 campaign (3 acts), monster model data, 4 modifiers, 4 trails |
 | Wire contract | `src/shared/Net/Protocol.luau` | Request schemas and validation |
-| Encounter rules | `src/server/Encounter/EncounterCore.luau` | Pure; threats, relay, scaling, roster, idle |
-| Run rules | `src/server/Run/RunCore.luau`, `Draft.luau`, `Rng.luau` | Pure; nine encounters, drafts, joins, seats, restarts, test conditions |
-| Server glue | `src/server/Run/RunManager.luau` | Remotes, players, profiles, analytics, clock |
+| Encounter rules | `src/server/Encounter/EncounterCore.luau` | Pure; threats, strikes, relay, scaling, roster, idle, per-player stats |
+| Run rules | `src/server/Run/RunCore.luau`, `Draft.luau` | Pure; path map, votes, campfires, treasure, elites, drafts, joins, seats, restarts, test conditions |
+| Lobby | `src/server/Lobby/PartyCore.luau` | Pure; parties (leader, kits, ready, campaign, privacy) |
+| Server world | `src/server/World/` | `Heroes` (avatar models), `MonsterAssets` (rebuilds generated monster meshes) |
+| Server glue | `src/server/Run/RunManager.luau` | Remotes, players, parties, profiles, analytics, clock |
 | Persistence | `src/server/Persistence/` | Schema, migrations, session-locked store |
-| Analytics | `src/server/Analytics/Funnels.luau` | Event map v1 |
+| Analytics | `src/server/Analytics/Funnels.luau` | Event map v2 |
 | Client | `src/client/Game.luau` | Orchestration |
-| Scene | `src/client/World/` | Workshop room, cabinet, monster (all code-built, swappable) |
+| Scene | `src/client/World/` | Lobby hall, rune altar (board cabinet), act scenery, battle ledge, heroes, generated monsters, monster gallery |
 | Board view | `src/client/BoardView/` | Pegs, ball playback, aim guide |
-| UI | `src/client/UI/` | Theme tokens, component kit, HUD, screens, workshop menu, teammate previews |
+| UI | `src/client/UI/` | Theme tokens, component kit, HUD, screens, lobby menu, path map, teammate previews |
 | Feedback | `src/client/Juice/` | Audio (modular audio objects), effects |
 | Cutscenes | `src/client/Cutscenes/Director.luau` | Camera and ≤ 5 s sequences |
 
-## Swapping in modelled art later
+## Art and models
 
-`World/Cabinet`, `World/Monster`, `World/Workshop`, and `BoardView/Board` each build their visuals in one place and expose a small API (`setPalette`, `hit`, `attack`, `die`, …). Replace the construction code, keep the API, and gameplay is untouched. Studio-authored models would live in the place (not in `src/`); the code would clone them by name.
+`World/Cabinet`, `World/Monster`, `World/Hero`, `World/Scenery`, `World/LobbyHall` and `BoardView/Board` each build their visuals in one place and expose a small API (`setPalette`, `hit`, `attack`, `die`, `strike`, …). Monsters come from generated meshes recorded as data (see `docs/ASSETS.md`); nothing depends on models saved in the place file.
+
+Screen layout: the board sits on the left; the battle ledge is raised (`Layout.BATTLE_Y`) so heroes and the monster stand at the board's mid-height, clear of the HUD along the bottom. The top band holds act progress, the monster's name and HP, the threat card and the teammate card.
 
 ## Tests
 

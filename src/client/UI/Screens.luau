@@ -37,7 +37,7 @@ local function modal(name: string, size: UDim2, color: Color3?): Modal
 		Parent = layer,
 	})
 	Kit.tween(backdrop, Theme.Motion.open, { BackgroundTransparency = 0.35 })
-	local panel = Kit.panel({ Size = size, Position = UDim2.fromScale(0.5, 0.5), AnchorPoint = Vector2.new(0.5, 0.5), Color = color or C.panel, ZIndex = 21, Parent = backdrop })
+	local panel = Kit.panel({ Size = size, Position = UDim2.fromScale(0.5, 0.5), AnchorPoint = Vector2.new(0.5, 0.5), Color = color or C.panel, Style = "ornate", ZIndex = 21, Parent = backdrop })
 	Kit.popIn(panel)
 	Audio.play("open")
 	local closed = false
@@ -58,6 +58,8 @@ local function modal(name: string, size: UDim2, color: Color3?): Modal
 			for _, d in panel:GetDescendants() do
 				if d:IsA("TextLabel") then
 					Kit.tween(d, Theme.Motion.close, { TextTransparency = 1 })
+				elseif d:IsA("ImageLabel") then
+					Kit.tween(d, Theme.Motion.close, { ImageTransparency = 1 })
 				end
 			end
 			task.delay(Theme.Motion.close + 0.02, function()
@@ -67,13 +69,19 @@ local function modal(name: string, size: UDim2, color: Color3?): Modal
 	}
 end
 
+-- A modal's heading on an iron plaque straddling the frame's top edge.
+local function plaqueTitle(panel: Frame, text: string, width: number?, z: number?)
+	return Kit.plaque({ Text = text, Height = 58, Size = UDim2.fromOffset(width or 420, 58), Position = UDim2.new(0.5, 0, 0, -26), AnchorPoint = Vector2.new(0.5, 0), ZIndex = (z or 22) + 2, Parent = panel })
+end
+Screens.plaqueTitle = plaqueTitle
+
 -- Draft ------------------------------------------------------------------
 
 export type DraftOption = { kind: string, id: string, badge: string }
 
 local BADGE = {
-	targeted = { text = "KIT PICK", color = C.gold },
-	kit = { text = "KIT", color = C.gold },
+	targeted = { text = "CLASS PICK", color = C.gold },
+	kit = { text = "CLASS", color = C.gold },
 	flex = { text = "FLEXIBLE", color = C.cyan },
 	wild = { text = "WILDCARD", color = C.pink },
 }
@@ -84,10 +92,10 @@ local function optionText(o: DraftOption, _rack: { string }): (string, string, s
 		return c.name, c.description, c.icon, C.panelLight
 	elseif o.kind == "ball" then
 		local b = Balls.ById[o.id]
-		return b.name, b.description, "●", b.color
+		return b.name, b.description, "🔮", b.color
 	else
 		local b = Balls.ById[o.id]
-		return "Upgrade " .. b.name, `+1 damage per hit for your {b.name}.`, "▲", b.color
+		return "Upgrade " .. b.name, `+1 damage per hit for your {b.name}.`, "⬆️", b.color
 	end
 end
 
@@ -96,8 +104,8 @@ export type Draft = { modal: Modal, setDeadline: (deadline: number, now: number)
 function Screens.draft(offer: { DraftOption }, rack: { string }, rerolls: number, fallback: number, title: string, onPick: (choice: number, slot: number?) -> (), onReroll: () -> ()): Draft
 	local m = modal("Draft", UDim2.fromOffset(820, 470))
 	local p = m.panel
-	Kit.label({ Text = "PICK AN UPGRADE", TextSize = 38, Bold = true, Size = UDim2.new(1, 0, 0, 44), Position = UDim2.fromOffset(0, 12), ZIndex = 22, Parent = p })
-	Kit.label({ Text = title, TextSize = 18, TextColor3 = C.textDim, Size = UDim2.new(1, 0, 0, 24), Position = UDim2.fromOffset(0, 54), ZIndex = 22, Parent = p })
+	plaqueTitle(p, "Claim a relic", 440)
+	Kit.label({ Text = title, TextSize = 18, TextColor3 = C.textDim, Size = UDim2.new(1, 0, 0, 24), Position = UDim2.fromOffset(0, 46), ZIndex = 22, Parent = p })
 	local cardsHolder = Kit.new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, -40, 0, 290), Position = UDim2.fromOffset(20, 100), ZIndex = 22, Parent = p })
 	local timerBar = Kit.bar({ Size = UDim2.new(1, -260, 0, 22), Position = UDim2.new(0, 20, 1, -42), Color = C.gold, TextSize = 14, ZIndex = 22, Parent = p })
 	local picked = false
@@ -106,7 +114,7 @@ function Screens.draft(offer: { DraftOption }, rack: { string }, rerolls: number
 	local reroll: Kit.Button
 	local function askSlot(choice: number)
 		local sm = modal("Slot", UDim2.fromOffset(520, 250))
-		Kit.label({ Text = "REPLACE WHICH BALL?", TextSize = 30, Bold = true, Size = UDim2.new(1, 0, 0, 40), Position = UDim2.fromOffset(0, 16), ZIndex = 22, Parent = sm.panel })
+		plaqueTitle(sm.panel, "Replace which ball?", 400, 22)
 		for i = 2, #rack do
 			local b = Balls.ById[rack[i]]
 			Kit.button({
@@ -147,7 +155,7 @@ function Screens.draft(offer: { DraftOption }, rack: { string }, rerolls: number
 				Size = UDim2.new(1, -24, 0, 54),
 				Position = UDim2.new(0.5, 0, 1, -12),
 				AnchorPoint = Vector2.new(0.5, 1),
-				Face = C.green,
+				Face = C.ember,
 				TextSize = 22,
 				ZIndex = 24,
 				Sound = "reward",
@@ -183,7 +191,7 @@ function Screens.draft(offer: { DraftOption }, rack: { string }, rerolls: number
 	reroll.setEnabled(rerolls > 0)
 
 	local deadlineAt = 0
-	local fallbackText = `If time runs out: repair {fallback} hull`
+	local fallbackText = `If time runs out: heal {fallback}`
 	local running = true
 	task.spawn(function()
 		while running do
@@ -224,14 +232,14 @@ end
 -- Defeat: free immediate restart (plan §2) ---------------------------------
 
 function Screens.defeat(onRestart: () -> (), onLeave: () -> ()): Modal
-	local m = modal("Defeat", UDim2.fromOffset(560, 300), Color3.fromRGB(70, 24, 44))
-	Kit.label({ Text = "KNOCKED OUT", TextSize = 46, Bold = true, TextColor3 = C.red, Size = UDim2.new(1, 0, 0, 56), Position = UDim2.fromOffset(0, 20), ZIndex = 22, Parent = m.panel })
-	Kit.label({ Text = "Restarting this fight is free. Your build stays.", TextSize = 20, Size = UDim2.new(1, -40, 0, 50), Position = UDim2.fromOffset(20, 86), TextWrapped = true, ZIndex = 22, Parent = m.panel })
-	Kit.button({ Text = "RESTART FIGHT", Size = UDim2.fromOffset(260, 70), Position = UDim2.new(0.5, -10, 1, -24), AnchorPoint = Vector2.new(1, 1), Face = C.green, TextSize = 24, ZIndex = 23, OnActivated = function()
+	local m = modal("Defeat", UDim2.fromOffset(560, 300), Color3.fromRGB(50, 14, 34))
+	Kit.label({ Text = "THE PARTY FALLS", Title = true, TextSize = 52, Bold = true, TextColor3 = C.red, Size = UDim2.new(1, 0, 0, 56), Position = UDim2.fromOffset(0, 20), ZIndex = 22, Parent = m.panel })
+	Kit.label({ Text = "Rising again is free: retry this fight with your build intact.", TextSize = 19, Size = UDim2.new(1, -40, 0, 50), Position = UDim2.fromOffset(20, 86), TextWrapped = true, ZIndex = 22, Parent = m.panel })
+	Kit.button({ Text = "RISE AGAIN", Size = UDim2.fromOffset(260, 70), Position = UDim2.new(0.5, -10, 1, -24), AnchorPoint = Vector2.new(1, 1), Face = C.ember, TextSize = 24, ZIndex = 23, OnActivated = function()
 		m.close()
 		onRestart()
 	end, Parent = m.panel })
-	Kit.button({ Text = "WORKSHOP", Size = UDim2.fromOffset(200, 70), Position = UDim2.new(0.5, 10, 1, -24), AnchorPoint = Vector2.new(0, 1), Face = C.panelLight, TextSize = 22, ZIndex = 23, OnActivated = function()
+	Kit.button({ Text = "RETURN TO HALL", Size = UDim2.fromOffset(220, 70), Position = UDim2.new(0.5, 10, 1, -24), AnchorPoint = Vector2.new(0, 1), Face = C.panelLight, TextSize = 20, ZIndex = 23, OnActivated = function()
 		m.close()
 		onLeave()
 	end, Parent = m.panel })
@@ -241,35 +249,128 @@ end
 
 -- Run results card ----------------------------------------------------------
 
-export type ResultRow = { name: string, damage: number, biggest: number, sent: number, used: number }
+export type ResultRow = { name: string, seat: number, damage: number, biggest: number, sent: number, used: number, guarded: number?, mended: number?, blocked: number? }
+
+-- Contribution bars: each hero's share of the party's damage, plus what
+-- they did for others (empowers sent, shield raised, wounds mended).
+local function contributionRows(parent: Frame, rows: { ResultRow }, y0: number, rowH: number)
+	local total = 0
+	local best = 0
+	for _, row in rows do
+		total += row.damage
+		best = math.max(best, row.damage)
+	end
+	for i, row in rows do
+		local y = y0 + (i - 1) * rowH
+		local col = Theme.slot(row.seat)
+		local pct = if total > 0 then row.damage / total else 0
+		local name = Kit.label({ Text = row.name .. (if row.damage == best and #rows > 1 and best > 0 then "  ★ MVP" else ""), TextSize = 19, Bold = true, TextColor3 = col, Size = UDim2.new(0.3, 0, 0, 26), Position = UDim2.new(0.04, 0, 0, y), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 22, Parent = parent })
+		Kit.popIn(name, 0.1 + i * 0.08)
+		local barBack = Kit.new("Frame", { BackgroundColor3 = Color3.fromRGB(8, 8, 22), Size = UDim2.new(0.42, 0, 0, 20), Position = UDim2.new(0.34, 0, 0, y + 3), ZIndex = 22, Parent = parent })
+		Kit.corner(4).Parent = barBack
+		Kit.stroke(1, C.goldDeep).Parent = barBack
+		local fill = Kit.new("Frame", { BackgroundColor3 = col, Size = UDim2.fromScale(0, 1), ZIndex = 23, Parent = barBack })
+		Kit.corner(4).Parent = fill
+		task.delay(0.25 + i * 0.1, function()
+			Kit.tween(fill, 0.6, { Size = UDim2.fromScale(math.max(0.02, pct), 1) })
+		end)
+		Kit.label({ Text = `{row.damage} dmg · {math.floor(pct * 100 + 0.5)}%`, TextSize = 14, Size = UDim2.new(0.42, 0, 0, 20), Position = UDim2.new(0.34, 0, 0, y + 3), ZIndex = 24, Parent = parent })
+		local support = {}
+		if row.sent > 0 then
+			table.insert(support, `🔮 {row.sent} empowers`)
+		end
+		if (row.guarded or 0) > 0 then
+			table.insert(support, `🛡️ {row.guarded} shield`)
+		end
+		if (row.mended or 0) > 0 then
+			table.insert(support, `♥{row.mended} mended`)
+		end
+		table.insert(support, `best {row.biggest}`)
+		Kit.label({ Text = table.concat(support, " · "), TextSize = 13, TextColor3 = C.textDim, Size = UDim2.new(0.22, 0, 0, 26), Position = UDim2.new(0.77, 0, 0, y), TextXAlignment = Enum.TextXAlignment.Left, TextWrapped = true, ZIndex = 22, Parent = parent })
+	end
+end
+Screens.contributionRows = contributionRows
 
 function Screens.results(title: string, rows: { ResultRow }, squadTotal: number, minutes: number, rematchLabel: string, onRematch: () -> (), onLeave: () -> ()): Modal
-	local m = modal("Results", UDim2.fromOffset(760, 460), C.panel)
-	Kit.label({ Text = title, TextSize = 44, Bold = true, TextColor3 = C.gold, Size = UDim2.new(1, 0, 0, 52), Position = UDim2.fromOffset(0, 16), ZIndex = 22, Parent = m.panel })
-	Kit.label({ Text = string.format("Squad total %d damage · %.1f min", squadTotal, minutes), TextSize = 20, TextColor3 = C.textDim, Size = UDim2.new(1, 0, 0, 24), Position = UDim2.fromOffset(0, 70), ZIndex = 22, Parent = m.panel })
-	local header = { "Player", "Damage", "Biggest shot", "Charges sent", "Charges used" }
-	local colX = { 0.04, 0.34, 0.5, 0.68, 0.84 }
-	for i, h in header do
-		Kit.label({ Text = h, TextSize = 16, TextColor3 = C.textDim, Size = UDim2.new(0.18, 0, 0, 20), Position = UDim2.new(colX[i], 0, 0, 112), TextXAlignment = if i == 1 then Enum.TextXAlignment.Left else Enum.TextXAlignment.Center, ZIndex = 22, Parent = m.panel })
-	end
-	for r, row in rows do
-		local y = 140 + (r - 1) * 44
-		local vals = { row.name, tostring(row.damage), tostring(row.biggest), tostring(row.sent), tostring(row.used) }
-		for i, v in vals do
-			local l = Kit.label({ Text = v, TextSize = 22, Size = UDim2.new(if i == 1 then 0.3 else 0.18, 0, 0, 30), Position = UDim2.new(colX[i], 0, 0, y), TextXAlignment = if i == 1 then Enum.TextXAlignment.Left else Enum.TextXAlignment.Center, ZIndex = 22, Parent = m.panel })
-			Kit.popIn(l, 0.15 + r * 0.08 + i * 0.03)
-		end
-	end
-	Kit.button({ Text = rematchLabel, Size = UDim2.fromOffset(240, 70), Position = UDim2.new(0.5, -10, 1, -22), AnchorPoint = Vector2.new(1, 1), Face = C.green, TextSize = 24, ZIndex = 23, OnActivated = function()
+	local m = modal("Results", UDim2.fromOffset(780, 470), C.panel)
+	local t = Kit.label({ Text = title, Title = true, TextSize = 54, Bold = true, TextColor3 = C.gold, Size = UDim2.new(1, 0, 0, 58), Position = UDim2.fromOffset(0, 14), ZIndex = 22, Parent = m.panel })
+	Kit.shimmer(t, 30, ColorSequence.new({ ColorSequenceKeypoint.new(0, C.gold), ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 240, 200)), ColorSequenceKeypoint.new(1, C.gold) }))
+	Kit.label({ Text = string.format("Party total %d damage · %.1f min", squadTotal, minutes), TextSize = 18, TextColor3 = C.textDim, Size = UDim2.new(1, 0, 0, 24), Position = UDim2.fromOffset(0, 74), ZIndex = 22, Parent = m.panel })
+	contributionRows(m.panel, rows, 118, 48)
+	Kit.button({ Text = rematchLabel, Size = UDim2.fromOffset(240, 70), Position = UDim2.new(0.5, -10, 1, -22), AnchorPoint = Vector2.new(1, 1), Face = C.ember, TextSize = 24, ZIndex = 23, OnActivated = function()
 		m.close()
 		onRematch()
 	end, Parent = m.panel })
-	Kit.button({ Text = "WORKSHOP", Size = UDim2.fromOffset(200, 70), Position = UDim2.new(0.5, 10, 1, -22), AnchorPoint = Vector2.new(0, 1), Face = C.panelLight, TextSize = 22, ZIndex = 23, OnActivated = function()
+	Kit.button({ Text = "RETURN TO HALL", Size = UDim2.fromOffset(220, 70), Position = UDim2.new(0.5, 10, 1, -22), AnchorPoint = Vector2.new(0, 1), Face = C.panelLight, TextSize = 20, ZIndex = 23, OnActivated = function()
 		m.close()
 		onLeave()
 	end, Parent = m.panel })
 	Audio.play("victory")
 	return m
+end
+
+-- Campfire: each hero repairs or trains a ball ---------------------------------
+
+export type Rest = { modal: Modal, setStatus: (text: string) -> (), setChosen: (chosen: boolean) -> (), setDeadline: (deadline: number, now: number) -> () }
+
+function Screens.rest(rack: { string }, healAmount: number, onHeal: () -> (), onTrain: (slot: number) -> ()): Rest
+	local m = modal("Rest", UDim2.fromOffset(760, 420), Color3.fromRGB(30, 14, 30))
+	Kit.label({ Text = "THE CAMPFIRE", Title = true, Bold = true, TextSize = 52, TextColor3 = C.ember, Size = UDim2.new(1, 0, 0, 56), Position = UDim2.fromOffset(0, 10), ZIndex = 22, Parent = m.panel })
+	Kit.label({ Text = "Warm your bones. Choose one.", TextSize = 17, TextColor3 = C.textDim, Size = UDim2.new(1, 0, 0, 22), Position = UDim2.fromOffset(0, 64), ZIndex = 22, Parent = m.panel })
+	local chosen = false
+	local buttons: { Kit.Button } = {}
+	local healCard = Kit.panel({ Size = UDim2.fromOffset(300, 220), Position = UDim2.fromOffset(30, 100), Color = C.panelLight, ZIndex = 22, Parent = m.panel })
+	Kit.label({ Text = "♥", TextSize = 56, TextColor3 = C.hull, Size = UDim2.new(1, 0, 0, 64), Position = UDim2.fromOffset(0, 8), ZIndex = 23, Parent = healCard })
+	Kit.plaque({ Text = "Rest", Height = 40, Size = UDim2.new(1, -40, 0, 40), Position = UDim2.new(0.5, 0, 0, 70), AnchorPoint = Vector2.new(0.5, 0), ZIndex = 23, Parent = healCard })
+	Kit.label({ Text = `Repair {healAmount} health.`, TextSize = 16, TextColor3 = C.textDim, Size = UDim2.new(1, -20, 0, 40), Position = UDim2.fromOffset(10, 108), TextWrapped = true, ZIndex = 23, Parent = healCard })
+	table.insert(buttons, Kit.button({ Text = "REST", Size = UDim2.new(1, -24, 0, 54), Position = UDim2.new(0, 12, 1, -12), AnchorPoint = Vector2.new(0, 1), Face = C.hull, TextSize = 20, ZIndex = 24, OnActivated = function()
+		if not chosen then
+			chosen = true
+			onHeal()
+		end
+	end, Parent = healCard }))
+	local trainCard = Kit.panel({ Size = UDim2.fromOffset(380, 220), Position = UDim2.new(1, -30, 0, 100), AnchorPoint = Vector2.new(1, 0), Color = C.panelLight, ZIndex = 22, Parent = m.panel })
+	Kit.label({ Text = "▲", TextSize = 50, TextColor3 = C.gold, Size = UDim2.new(1, 0, 0, 64), Position = UDim2.fromOffset(0, 8), ZIndex = 23, Parent = trainCard })
+	Kit.plaque({ Text = "Train", Height = 40, Size = UDim2.new(1, -40, 0, 40), Position = UDim2.new(0.5, 0, 0, 70), AnchorPoint = Vector2.new(0.5, 0), ZIndex = 23, Parent = trainCard })
+	Kit.label({ Text = "+1 damage per hit for one ball:", TextSize = 16, TextColor3 = C.textDim, Size = UDim2.new(1, -20, 0, 22), Position = UDim2.fromOffset(10, 108), ZIndex = 23, Parent = trainCard })
+	for i, id in rack do
+		local b = Balls.ById[id]
+		table.insert(buttons, Kit.button({ Text = (string.gsub(b.name, " Ball", "")), Size = UDim2.new(1 / #rack, -10, 0, 54), Position = UDim2.new((i - 1) / #rack, 6, 1, -12), AnchorPoint = Vector2.new(0, 1), Face = Theme.deep(b.color, 0.7), TextSize = 15, ZIndex = 24, OnActivated = function()
+			if not chosen then
+				chosen = true
+				onTrain(i)
+			end
+		end, Parent = trainCard }))
+	end
+	local timer = Kit.bar({ Size = UDim2.new(1, -60, 0, 18), Position = UDim2.new(0, 30, 1, -40), Color = C.ember, TextSize = 12, ZIndex = 22, Parent = m.panel })
+	local status = Kit.label({ Text = "", TextSize = 15, TextColor3 = C.textDim, Size = UDim2.new(1, -60, 0, 20), Position = UDim2.new(0, 30, 1, -64), ZIndex = 22, Parent = m.panel })
+	local deadline = 0
+	local offset = 0
+	task.spawn(function()
+		while m.backdrop.Parent do
+			local now = os.clock() + offset
+			local left = math.max(0, deadline - now)
+			timer.set(left, 20)
+			timer.setText(`{math.ceil(left)}s · if time runs out: rest`)
+			task.wait(0.1)
+		end
+	end)
+	return {
+		modal = m,
+		setStatus = function(text: string)
+			status.Text = text
+		end,
+		setChosen = function(c: boolean)
+			chosen = c
+			for _, b in buttons do
+				b.setEnabled(not c)
+			end
+		end,
+		setDeadline = function(d: number, now: number)
+			deadline = d
+			offset = now - os.clock()
+		end,
+	}
 end
 
 -- Settings ---------------------------------------------------------------------
@@ -278,7 +379,7 @@ export type SettingsState = { reducedMotion: boolean, music: number, sfx: number
 
 function Screens.settings(state: SettingsState, onChange: (SettingsState) -> (), onLeaveRun: (() -> ())?): Modal
 	local m = modal("Settings", UDim2.fromOffset(520, 420))
-	Kit.label({ Text = "SETTINGS", TextSize = 36, Bold = true, Size = UDim2.new(1, 0, 0, 44), Position = UDim2.fromOffset(0, 14), ZIndex = 22, Parent = m.panel })
+	plaqueTitle(m.panel, "Settings", 320)
 	local function toggleRow(y: number, text: string, get: () -> boolean, set: (boolean) -> ())
 		Kit.label({ Text = text, TextSize = 22, Size = UDim2.new(0.6, 0, 0, 30), Position = UDim2.new(0.06, 0, 0, y + 10), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 22, Parent = m.panel })
 		local b: Kit.Button
@@ -363,7 +464,7 @@ end
 
 function Screens.pegKey(): Modal
 	local m = modal("PegKey", UDim2.fromOffset(700, 470))
-	Kit.label({ Text = "PEG KEY", TextSize = 34, Bold = true, Size = UDim2.new(1, 0, 0, 42), Position = UDim2.fromOffset(0, 12), ZIndex = 22, Parent = m.panel })
+	plaqueTitle(m.panel, "Peg key", 300)
 	for i, kindName in Pegs.Order do
 		local kind: Pegs.PegKind = kindName :: any
 		local def = Pegs.Defs[kind]
@@ -386,7 +487,7 @@ function Screens.tip(text: string, anchor: UDim2, hold: number?)
 		(tip :: Frame):Destroy()
 		tip = nil
 	end
-	local f = Kit.panel({ Size = UDim2.fromOffset(330, 74), Position = anchor, AnchorPoint = Vector2.new(0.5, 0.5), Color = C.gold, ZIndex = 35, Parent = layer })
+	local f = Kit.panel({ Size = UDim2.fromOffset(330, 74), Position = anchor, AnchorPoint = Vector2.new(0.5, 0.5), Color = Color3.fromRGB(214, 186, 132), ZIndex = 35, Parent = layer })
 	Kit.label({ Text = text, TextSize = 19, TextColor3 = C.ink, Stroke = false, Size = UDim2.new(1, -20, 1, -10), Position = UDim2.fromOffset(10, 5), TextWrapped = true, ZIndex = 36, Parent = f })
 	Kit.popIn(f)
 	tip = f
@@ -440,7 +541,7 @@ local idle: Modal? = nil
 function Screens.idleWarning(show: boolean)
 	if show and idle == nil then
 		local m = modal("Idle", UDim2.fromOffset(460, 180), C.panelLight)
-		Kit.label({ Text = "STILL THERE?", TextSize = 36, Bold = true, Size = UDim2.new(1, 0, 0, 46), Position = UDim2.fromOffset(0, 24), ZIndex = 22, Parent = m.panel })
+		plaqueTitle(m.panel, "Still there?", 360)
 		Kit.label({ Text = "Aim or launch in 15 s to keep your seat in this fight.", TextSize = 18, Size = UDim2.new(1, -30, 0, 50), Position = UDim2.fromOffset(15, 80), TextWrapped = true, ZIndex = 22, Parent = m.panel })
 		m.backdrop.BackgroundTransparency = 0.6
 		idle = m

@@ -1,15 +1,18 @@
 --!strict
--- Authoritative run state machine: nine encounters, drafts between them,
--- joins at drafts only, held seats, free restarts, and the developer test
+-- Authoritative run state machine for a campaign: acts made of branching
+-- maps (Sim/MapGen), a party vote at every fork, fights/elites/bosses,
+-- treasure and campfire nodes, drafts after victories, joins at any
+-- non-fight boundary, held seats, free restarts, and the developer test
 -- conditions. Pure and time-driven like EncounterCore.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 
 local Config = require(Shared.Config)
-local Route = require(Shared.Content.Route)
+local Campaigns = require(Shared.Content.Campaigns)
 local Kits = require(Shared.Content.Kits)
 local Components = require(Shared.Content.Components)
+local MapGen = require(Shared.Sim.MapGen)
 local Encounter = require(script.Parent.Parent.Encounter.EncounterCore)
 local Draft = require(script.Parent.Draft)
 
@@ -23,6 +26,9 @@ export type Stats = {
 	chargesUsed: number,
 	bonusDamage: number,
 	shots: number,
+	guarded: number,
+	mended: number,
+	blocked: number,
 }
 
 export type Member = {
@@ -35,7 +41,7 @@ export type Member = {
 	maxHull: number,
 	status: "active" | "waiting" | "disconnected",
 	disconnectedAt: number?,
-	admittedAt: number, -- encounter index at which they joined
+	admittedAt: number, -- node index at which they joined
 	rerolls: number,
 	rerollLeg: number,
 	targetedLeg: number,
@@ -44,24 +50,33 @@ export type Member = {
 	picked: boolean,
 	lastPick: string?,
 	recipient: number?,
+	vote: string?,
+	restChoice: string?, -- "heal" | "train:<slot>"
 	stats: Stats,
 }
 
 export type TestCondition = "solo" | "duo_self" | "duo_teammate"
+
+export type Resume = {
+	act: number,
+	atNode: string?, -- last completed node in that act (nil = act start)
+	index: number, -- nodes completed so far
+}
 
 export type Params = {
 	id: string,
 	seed: string,
 	hostUid: number,
 	now: number,
+	campaign: string?,
 	modifiers: { [string]: boolean },
 	familyPool: { [string]: boolean },
 	privacy: "open" | "friends" | "closed",
 	mode: "normal" | "test",
 	condition: TestCondition?,
 	maxParty: number,
-	firstIntro: boolean, -- play the long intro (first run this session)
-	startIndex: number?, -- resume from a confirmed checkpoint (solo continuation)
+	firstIntro: boolean, -- play the long intro (first fight this session)
+	resume: Resume?, -- personal continuation from a confirmed checkpoint
 }
 
 export type Preset = {
@@ -74,35 +89,47 @@ export type Preset = {
 
 export type Founder = { uid: number, kit: string, preset: Preset? }
 
+export type DraftKind = "fight" | "elite" | "boss" | "treasure"
+
 local Run = {}
 Run.__index = Run
 
 Run.INTRO_FIRST = 4.0
 Run.INTRO = 2.4
 Run.BOSS_INTRO = 3.2
-Run.LEG_BEAT = 2.6
 Run.RESULT_BEAT = 1.8
 Run.DRAFT_FALLBACK_REPAIR = 8
+Run.MAP_SINGLE_SECONDS = 4 -- a forced step still shows the map briefly
 
 -- Test encounter: identical board, HP, threat, upgrade, and timing in every
 -- condition (plan §12). Duo conditions use duo HP; solo uses solo HP.
-Run.TEST_NODE = { enemy = "brute", board = "lanes", boss = false }
+Run.TEST_NODE = { id = "test", kind = "fight", enemy = "brute", board = "lanes" }
 Run.TEST_SOLO_HP = 400
 Run.TEST_UPGRADE = "whetstone"
+
+export type CurrentNode = { id: string, kind: MapGen.NodeKind, enemy: string?, board: string? }
 
 export type Run = typeof(setmetatable(
 	{} :: {
 		id: string,
 		seed: string,
 		hostUid: number,
+		campaign: string,
 		mode: "normal" | "test",
 		condition: TestCondition?,
 		modifiers: { [string]: boolean },
 		familyPool: { [string]: boolean },
 		privacy: "open" | "friends" | "closed",
 		maxParty: number,
-		index: number,
-		state: "fight" | "reward" | "draft" | "lost" | "finished" | "abandoned",
+		index: number, -- nodes entered so far (1 = first node)
+		act: number,
+		map: MapGen.ActMap?,
+		atNode: string?, -- last completed node in the current act
+		current: CurrentNode?,
+		path: { string }, -- node ids taken this act
+		choices: { string },
+		draftKind: DraftKind,
+		state: "map" | "fight" | "reward" | "draft" | "rest" | "lost" | "finished" | "abandoned",
 		stateAt: number,
 		stateEndsAt: number,
 		encounter: Encounter.Encounter?,
@@ -124,7 +151,7 @@ local function emit(self: Run, ev: { [string]: any })
 end
 
 local function newStats(): Stats
-	return { damage = 0, biggestShot = 0, chargesSent = 0, chargesUsed = 0, bonusDamage = 0, shots = 0 }
+	return { damage = 0, biggestShot = 0, chargesSent = 0, chargesUsed = 0, bonusDamage = 0, shots = 0, guarded = 0, mended = 0, blocked = 0 }
 end
 
 function Run.newMember(uid: number, kitId: string, completed: number): Member
@@ -157,23 +184,69 @@ function Run.newMember(uid: number, kitId: string, completed: number): Member
 		picked = false,
 		lastPick = nil,
 		recipient = nil,
+		vote = nil,
+		restChoice = nil,
 		stats = newStats(),
 	}
 end
+
+function Run.campaignDef(self: Run): Campaigns.Campaign
+	return Campaigns.ById[self.campaign]
+end
+
+function Run.actCount(self: Run): number
+	return #Run.campaignDef(self).acts
+end
+
+-- Kept for callers that think in legs (analytics milestones).
+function Run.legOf(self: Run, _index: number?): number
+	return self.act
+end
+
+function Run.activeMembers(self: Run): { Member }
+	local list = {}
+	for _, uid in self.order do
+		local m = self.members[uid]
+		if m and m.status == "active" then
+			table.insert(list, m)
+		end
+	end
+	return list
+end
+
+function Run.partySize(self: Run): number
+	local n = 0
+	for _, uid in self.order do
+		if self.members[uid] then
+			n += 1
+		end
+	end
+	return n
+end
+
+local openMap: (self: Run, now: number) -> ()
 
 function Run.new(p: Params, founders: { Founder }): Run
 	local self = setmetatable({}, Run) :: any
 	self.id = p.id
 	self.seed = p.seed
 	self.hostUid = p.hostUid
+	self.campaign = if p.campaign and Campaigns.ById[p.campaign] then p.campaign else Campaigns.DEFAULT
 	self.mode = p.mode
 	self.condition = p.condition
 	self.modifiers = p.modifiers
 	self.familyPool = p.familyPool
 	self.privacy = p.privacy
 	self.maxParty = p.maxParty
-	self.index = p.startIndex or 1
-	self.state = "fight"
+	self.index = 0
+	self.act = 1
+	self.map = nil
+	self.atNode = nil
+	self.current = nil
+	self.path = {}
+	self.choices = {}
+	self.draftKind = "fight"
+	self.state = "map"
 	self.stateAt = p.now
 	self.stateEndsAt = math.huge
 	self.encounter = nil
@@ -202,54 +275,141 @@ function Run.new(p: Params, founders: { Founder }): Run
 		self.members[f.uid] = m
 		table.insert(self.order, f.uid)
 	end
-	Run._startEncounter(self, p.now, false)
+	if p.mode == "test" then
+		self.index = 1
+		self.current = table.clone(Run.TEST_NODE) :: any
+		Run._startEncounter(self, p.now)
+		return self
+	end
+	if p.resume then
+		local r = p.resume :: Resume
+		self.act = math.clamp(r.act, 1, Run.actCount(self))
+		self.index = r.index
+		self.atNode = r.atNode
+	end
+	self.map = MapGen.generate(self.campaign, self.act, self.seed)
+	openMap(self, p.now)
 	return self
 end
 
-function Run.node(self: Run): Route.Node
-	if self.mode == "test" then
-		return Run.TEST_NODE
-	end
-	local _, _, node = Route.at(self.index)
-	return node
-end
-
-function Run.legOf(self: Run, index: number): number
-	if self.mode == "test" then
-		return 1
-	end
-	local leg = Route.at(index)
-	return leg
-end
-
-function Run.activeMembers(self: Run): { Member }
-	local list = {}
+local function admitWaiting(self: Run)
+	-- Waiting newcomers are admitted at every non-fight boundary.
+	local completed = self.index
 	for _, uid in self.order do
 		local m = self.members[uid]
-		if m and m.status == "active" then
-			table.insert(list, m)
+		if m and m.status == "waiting" then
+			local fresh = Run.newMember(uid, m.kit, completed)
+			-- A returning seat keeps its build; a newcomer gets the catch-up kit.
+			if m.admittedAt > 0 and #m.components > 0 and m.disconnectedAt ~= nil then
+				fresh.components = m.components
+				fresh.rack = m.rack
+				fresh.ballLevels = m.ballLevels
+				fresh.maxHull = m.maxHull
+				fresh.hull = math.max(1, m.hull)
+				fresh.stats = m.stats
+			end
+			fresh.picked = true
+			fresh.restChoice = "heal"
+			self.members[uid] = fresh
+			emit(self, { type = "admitted", uid = uid, catchUp = fresh.components, completed = completed })
 		end
 	end
-	return list
 end
 
-function Run.partySize(self: Run): number
-	local n = 0
-	for _, uid in self.order do
-		local m = self.members[uid]
-		if m then
-			n += 1
+openMap = function(self: Run, now: number)
+	local map = self.map :: MapGen.ActMap
+	admitWaiting(self)
+	self.state = "map"
+	self.stateAt = now
+	local choices = MapGen.choices(map, self.atNode)
+	self.choices = {}
+	for _, n in choices do
+		table.insert(self.choices, n.id)
+	end
+	for _, m in Run.activeMembers(self) do
+		m.vote = nil
+	end
+	local seconds = if #self.choices <= 1 then Run.MAP_SINGLE_SECONDS else RUN.MAP_SECONDS
+	self.stateEndsAt = now + seconds
+	emit(self, { type = "mapOpen", act = self.act, choices = table.clone(self.choices), deadline = self.stateEndsAt })
+end
+
+-- Party vote: most votes wins; a tie goes to the host's pick when the host
+-- voted for one of the tied nodes, otherwise to the leftmost tied node.
+function Run.tallyVotes(self: Run): string
+	local counts: { [string]: number } = {}
+	for _, m in Run.activeMembers(self) do
+		if m.vote and table.find(self.choices, m.vote) then
+			counts[m.vote] = (counts[m.vote] or 0) + 1
 		end
 	end
-	return n
+	local best = 0
+	local tied: { string } = {}
+	for _, id in self.choices do
+		local n = counts[id] or 0
+		if n > best then
+			best = n
+			tied = { id }
+		elseif n == best then
+			table.insert(tied, id)
+		end
+	end
+	if #tied == 1 then
+		return tied[1]
+	end
+	local host = self.members[self.hostUid]
+	if host and host.vote and table.find(tied, host.vote) then
+		return host.vote :: string
+	end
+	return tied[1]
 end
 
-function Run._startEncounter(self: Run, now: number, legBeat: boolean)
-	local node = Run.node(self)
-	local intro = if self.firstIntro then Run.INTRO_FIRST elseif node.boss then Run.BOSS_INTRO else Run.INTRO
-	if legBeat then
-		intro += Run.LEG_BEAT
+local function openRest(self: Run, now: number)
+	self.state = "rest"
+	self.stateAt = now
+	self.stateEndsAt = now + RUN.REST_SECONDS
+	for _, m in Run.activeMembers(self) do
+		m.restChoice = nil
 	end
+	emit(self, { type = "restOpen", deadline = self.stateEndsAt })
+end
+
+local function openDraft(self: Run, now: number, kind: DraftKind)
+	admitWaiting(self)
+	self.draftKind = kind
+	self.state = "draft"
+	self.stateAt = now
+	self.stateEndsAt = now + RUN.DRAFT_SECONDS
+	-- After a boss the offers belong to the next act.
+	local leg = if kind == "boss" then self.act + 1 else self.act
+	for _, m in Run.activeMembers(self) do
+		if m.picked and m.offer == nil and m.admittedAt > self.index then
+			continue -- admitted at this boundary: they took the catch-up kit
+		end
+		if m.rerollLeg ~= leg then
+			m.rerollLeg = leg
+			m.rerolls = RUN.REROLLS_PER_LEG
+		end
+		m.picked = false
+		m.offerRerolls = 0
+		local targeted = m.targetedLeg ~= leg and kind ~= "treasure"
+		m.offer = Draft.generate(m, {
+			seed = `{self.seed}|{m.uid}|{self.index}|0`,
+			targeted = targeted,
+			familyPool = self.familyPool,
+			treasure = kind == "treasure",
+		})
+		if targeted then
+			m.targetedLeg = leg
+		end
+	end
+	emit(self, { type = "draftOpen", deadline = self.stateEndsAt, kind = kind })
+end
+
+function Run._startEncounter(self: Run, now: number)
+	local node = self.current :: CurrentNode
+	local isBoss = node.kind == "boss"
+	local intro = if self.firstIntro then Run.INTRO_FIRST elseif isBoss then Run.BOSS_INTRO else Run.INTRO
 	self.firstIntro = false
 	self.introLength = intro
 	local seeds = {}
@@ -273,16 +433,19 @@ function Run._startEncounter(self: Run, now: number, legBeat: boolean)
 			relayMode = "self"
 		end
 	end
+	local elite = node.kind == "elite"
 	local enc = Encounter.new({
 		id = `{self.id}/{self.index}.{self.restarts}`,
-		enemyId = node.enemy,
-		boardId = node.board,
+		enemyId = node.enemy :: string,
+		boardId = node.board :: string,
 		now = now,
 		startAt = now + intro,
 		players = seeds,
 		modifiers = self.modifiers,
 		relayMode = relayMode,
 		hpOverride = hpOverride,
+		hpMult = if elite then COMBAT.ELITE_HP_MULT else nil,
+		damageMult = if elite then COMBAT.ELITE_DAMAGE_MULT else nil,
 	})
 	for _, m in Run.activeMembers(self) do
 		if m.recipient then
@@ -296,13 +459,62 @@ function Run._startEncounter(self: Run, now: number, legBeat: boolean)
 	emit(self, {
 		type = "encounterStart",
 		index = self.index,
+		act = self.act,
+		nodeId = node.id,
+		kind = node.kind,
 		enemy = node.enemy,
 		board = node.board,
-		boss = node.boss,
+		boss = isBoss,
+		elite = elite,
 		intro = intro,
-		legBeat = legBeat,
 		startAt = now + intro,
 	})
+end
+
+local function enterNode(self: Run, now: number, nodeId: string)
+	local map = self.map :: MapGen.ActMap
+	local node = map.byId[nodeId]
+	self.current = { id = node.id, kind = node.kind, enemy = node.enemy, board = node.board }
+	self.index += 1
+	table.insert(self.path, node.id)
+	if node.kind == "fight" or node.kind == "elite" or node.kind == "boss" then
+		Run._startEncounter(self, now)
+	elseif node.kind == "treasure" then
+		openDraft(self, now, "treasure")
+	elseif node.kind == "rest" then
+		openRest(self, now)
+	end
+end
+
+local function closeMap(self: Run, now: number)
+	local winner = Run.tallyVotes(self)
+	local votes = {}
+	for _, m in Run.activeMembers(self) do
+		votes[tostring(m.uid)] = m.vote
+	end
+	local node = (self.map :: MapGen.ActMap).byId[winner]
+	emit(self, { type = "pathChosen", nodeId = winner, kind = node.kind, votes = votes, act = self.act })
+	enterNode(self, now, winner)
+end
+
+-- Leaves the current node and moves on: next fork, next act, or the end.
+local function advance(self: Run, now: number)
+	local cur = self.current :: CurrentNode
+	if #Run.activeMembers(self) == 0 then
+		self.state = "abandoned"
+		emit(self, { type = "abandoned" })
+		return
+	end
+	if cur.kind == "boss" then
+		self.act += 1
+		self.atNode = nil
+		self.path = {}
+		self.map = MapGen.generate(self.campaign, self.act, self.seed)
+		emit(self, { type = "actStart", act = self.act })
+	else
+		self.atNode = cur.id
+	end
+	openMap(self, now)
 end
 
 local function collectStats(self: Run)
@@ -319,13 +531,17 @@ local function collectStats(self: Run)
 			m.stats.chargesUsed += ps.chargesUsed
 			m.stats.bonusDamage += ps.bonusDamage
 			m.stats.shots += ps.shots
+			m.stats.guarded += ps.guarded
+			m.stats.mended += ps.mended
+			m.stats.blocked += ps.blocked
 		end
 	end
 end
 
 local function finishEncounter(self: Run, now: number, won: boolean)
 	local enc = self.encounter :: Encounter.Encounter
-	local node = Run.node(self)
+	local node = self.current :: CurrentNode
+	local isBoss = node.kind == "boss"
 	collectStats(self)
 	-- Carry hull forward; defeated players return at half hull.
 	for uid, ps in enc.players do
@@ -348,13 +564,18 @@ local function finishEncounter(self: Run, now: number, won: boolean)
 			chargesUsed = ps.chargesUsed,
 			bonusDamage = ps.bonusDamage,
 			shots = ps.shots,
+			guarded = ps.guarded,
+			mended = ps.mended,
+			blocked = ps.blocked,
 		}
 	end
 	local duration = (enc.endAt or now) - enc.startAt
 	self.lastOutcome = {
 		index = self.index,
 		won = won,
-		boss = node.boss,
+		boss = isBoss,
+		elite = node.kind == "elite",
+		enemy = node.enemy,
 		duration = duration,
 		perPlayer = perPlayer,
 		condition = self.condition,
@@ -363,7 +584,10 @@ local function finishEncounter(self: Run, now: number, won: boolean)
 	emit(self, {
 		type = if won then "encounterWon" else "encounterLost",
 		index = self.index,
-		boss = node.boss,
+		act = self.act,
+		nodeId = node.id,
+		boss = isBoss,
+		elite = node.kind == "elite",
 		duration = duration,
 		perPlayer = perPlayer,
 		condition = self.condition,
@@ -382,66 +606,27 @@ local function finishEncounter(self: Run, now: number, won: boolean)
 		emit(self, { type = "rematchOffered", kind = "test" })
 		return
 	end
-	if node.boss then
-		local leg = Run.legOf(self, self.index)
-		emit(self, { type = "bossDefeated", leg = leg })
+	if node.kind == "elite" then
+		for _, m in Run.activeMembers(self) do
+			m.maxHull += COMBAT.ELITE_SPOILS_MAX_HULL
+			m.hull += COMBAT.ELITE_SPOILS_MAX_HULL
+		end
+		emit(self, { type = "eliteSpoils", maxHull = COMBAT.ELITE_SPOILS_MAX_HULL })
 	end
-	if self.index >= Route.count() then
-		self.state = "finished"
-		self.stateAt = now
-		self.stateEndsAt = math.huge
-		emit(self, { type = "runFinished", duration = now - self.startedAt })
-		emit(self, { type = "rematchOffered", kind = "run" })
-		return
+	if isBoss then
+		emit(self, { type = "bossDefeated", leg = self.act, act = self.act })
+		if self.act >= Run.actCount(self) then
+			self.state = "finished"
+			self.stateAt = now
+			self.stateEndsAt = math.huge
+			emit(self, { type = "runFinished", duration = now - self.startedAt })
+			emit(self, { type = "rematchOffered", kind = "run" })
+			return
+		end
 	end
 	self.state = "reward"
 	self.stateAt = now
 	self.stateEndsAt = now + Run.RESULT_BEAT
-end
-
-local function openDraft(self: Run, now: number)
-	self.state = "draft"
-	self.stateAt = now
-	self.stateEndsAt = now + RUN.DRAFT_SECONDS
-	local nextLeg = Run.legOf(self, self.index + 1)
-	for _, m in Run.activeMembers(self) do
-		if m.rerollLeg ~= nextLeg then
-			m.rerollLeg = nextLeg
-			m.rerolls = RUN.REROLLS_PER_LEG
-		end
-		m.picked = false
-		m.offerRerolls = 0
-		local targeted = m.targetedLeg ~= nextLeg
-		m.offer = Draft.generate(m, {
-			seed = `{self.seed}|{m.uid}|{self.index}|0`,
-			targeted = targeted,
-			familyPool = self.familyPool,
-		})
-		if targeted then
-			m.targetedLeg = nextLeg
-		end
-	end
-	-- Waiting newcomers are admitted now (drafts are the only boundary).
-	local completed = self.index
-	for _, uid in self.order do
-		local m = self.members[uid]
-		if m and m.status == "waiting" then
-			local fresh = Run.newMember(uid, m.kit, completed)
-			-- A returning seat keeps its build; a newcomer gets the fixed kit.
-			if m.admittedAt > 0 and #m.components > 0 and m.disconnectedAt ~= nil then
-				fresh.components = m.components
-				fresh.rack = m.rack
-				fresh.ballLevels = m.ballLevels
-				fresh.maxHull = m.maxHull
-				fresh.hull = math.max(1, m.hull)
-				fresh.stats = m.stats
-			end
-			fresh.picked = true
-			self.members[uid] = fresh
-			emit(self, { type = "admitted", uid = uid, catchUp = fresh.components, completed = completed })
-		end
-	end
-	emit(self, { type = "draftOpen", deadline = self.stateEndsAt })
 end
 
 local function applyOption(m: Member, opt: Draft.Option, slot: number?)
@@ -465,32 +650,77 @@ local function applyOption(m: Member, opt: Draft.Option, slot: number?)
 end
 
 local function closeDraft(self: Run, now: number)
-	local node = Run.node(self)
 	for _, m in Run.activeMembers(self) do
 		if not m.picked then
-			-- Previewed free fallback when the 20 s deadline passes.
+			-- Previewed free fallback when the deadline passes.
 			m.hull = math.min(m.maxHull, m.hull + Run.DRAFT_FALLBACK_REPAIR)
 			m.picked = true
 			m.lastPick = "fallback"
 			emit(self, { type = "draftFallback", uid = m.uid })
 		end
-		if node.boss then
+		if self.draftKind == "boss" then
 			m.hull = math.min(m.maxHull, m.hull + math.floor(m.maxHull * COMBAT.BOSS_REPAIR_FRACTION + 0.5))
 		end
 		m.offer = nil
 	end
-	local prevLeg = Run.legOf(self, self.index)
-	self.index += 1
-	local newLeg = Run.legOf(self, self.index)
-	if #Run.activeMembers(self) == 0 then
-		self.state = "abandoned"
-		emit(self, { type = "abandoned" })
-		return
+	advance(self, now)
+end
+
+local function closeRest(self: Run, now: number)
+	for _, m in Run.activeMembers(self) do
+		local choice = m.restChoice or "heal"
+		if string.sub(choice, 1, 6) == "train:" then
+			local slot = tonumber(string.sub(choice, 7)) or 1
+			local id = m.rack[math.clamp(slot, 1, #m.rack)]
+			m.ballLevels[id] = (m.ballLevels[id] or 0) + 1
+			emit(self, { type = "rested", uid = m.uid, choice = "train", ball = id })
+		else
+			local amount = math.floor(m.maxHull * COMBAT.REST_HEAL_FRACTION + 0.5)
+			local before = m.hull
+			m.hull = math.min(m.maxHull, m.hull + amount)
+			emit(self, { type = "rested", uid = m.uid, choice = "heal", amount = m.hull - before })
+		end
+		m.restChoice = nil
 	end
-	Run._startEncounter(self, now, newLeg ~= prevLeg)
+	advance(self, now)
 end
 
 export type Result = { ok: boolean, reason: string? }
+
+function Run.vote(self: Run, uid: number, nodeId: string): Result
+	local m = self.members[uid]
+	if self.state ~= "map" or m == nil or m.status ~= "active" then
+		return { ok = false, reason = "phase" }
+	end
+	if type(nodeId) ~= "string" or table.find(self.choices, nodeId) == nil then
+		return { ok = false, reason = "choice" }
+	end
+	m.vote = nodeId
+	emit(self, { type = "voted", uid = uid, nodeId = nodeId })
+	return { ok = true }
+end
+
+function Run.chooseRest(self: Run, uid: number, choice: string, slot: number?): Result
+	local m = self.members[uid]
+	if self.state ~= "rest" or m == nil or m.status ~= "active" then
+		return { ok = false, reason = "phase" }
+	end
+	if m.restChoice ~= nil then
+		return { ok = false, reason = "already_chosen" }
+	end
+	if choice == "heal" then
+		m.restChoice = "heal"
+	elseif choice == "train" then
+		if type(slot) ~= "number" or slot % 1 ~= 0 or slot < 1 or slot > #m.rack then
+			return { ok = false, reason = "slot" }
+		end
+		m.restChoice = `train:{slot}`
+	else
+		return { ok = false, reason = "choice" }
+	end
+	emit(self, { type = "restChosen", uid = uid, choice = choice })
+	return { ok = true }
+end
 
 function Run.pick(self: Run, uid: number, choice: number, slot: number?): Result
 	local m = self.members[uid]
@@ -530,6 +760,7 @@ function Run.reroll(self: Run, uid: number): Result
 		seed = `{self.seed}|{m.uid}|{self.index}|{m.offerRerolls}`,
 		targeted = false,
 		familyPool = self.familyPool,
+		treasure = self.draftKind == "treasure",
 	})
 	emit(self, { type = "draftRerolled", uid = uid })
 	return { ok = true }
@@ -550,11 +781,11 @@ function Run.restart(self: Run, uid: number, now: number): Result
 	end
 	self.restarts += 1
 	emit(self, { type = "rematchStarted", uid = uid, kind = "restart" })
-	Run._startEncounter(self, now, false)
+	Run._startEncounter(self, now)
 	return { ok = true }
 end
 
--- Newcomer asks to join. Admission happens only at a draft.
+-- Newcomer asks to join. Admission happens at the next non-fight boundary.
 function Run.requestJoin(self: Run, uid: number, kitId: string, now: number): Result
 	if self.members[uid] then
 		local m = self.members[uid]
@@ -579,11 +810,8 @@ function Run.requestJoin(self: Run, uid: number, kitId: string, now: number): Re
 	self.members[uid] = m
 	table.insert(self.order, uid)
 	emit(self, { type = "waiting", uid = uid })
-	if self.state == "draft" then
-		local fresh = Run.newMember(uid, kitId, self.index)
-		fresh.picked = true
-		self.members[uid] = fresh
-		emit(self, { type = "admitted", uid = uid, catchUp = fresh.components, completed = self.index })
+	if self.state == "draft" or self.state == "map" or self.state == "rest" then
+		admitWaiting(self)
 	end
 	return { ok = true }
 end
@@ -598,7 +826,25 @@ function Run.rejoin(self: Run, uid: number, now: number): Result
 	end
 	m.status = "waiting"
 	emit(self, { type = "waiting", uid = uid, returning = true })
+	if self.state == "draft" or self.state == "map" or self.state == "rest" then
+		admitWaiting(self)
+	end
 	return { ok = true }
+end
+
+local function everyoneDone(self: Run): boolean
+	local any = false
+	for _, m in Run.activeMembers(self) do
+		any = true
+		if self.state == "draft" and not m.picked then
+			return false
+		elseif self.state == "map" and m.vote == nil then
+			return false
+		elseif self.state == "rest" and m.restChoice == nil then
+			return false
+		end
+	end
+	return any
 end
 
 function Run.leave(self: Run, uid: number, now: number, hold: boolean)
@@ -621,16 +867,8 @@ function Run.leave(self: Run, uid: number, now: number, hold: boolean)
 		end
 		emit(self, { type = "memberLeft", uid = uid })
 	end
-	if self.state == "draft" then
-		local allPicked = true
-		for _, am in Run.activeMembers(self) do
-			if not am.picked then
-				allPicked = false
-			end
-		end
-		if allPicked and #Run.activeMembers(self) > 0 then
-			self.stateEndsAt = now
-		end
+	if (self.state == "draft" or self.state == "map" or self.state == "rest") and everyoneDone(self) then
+		self.stateEndsAt = math.min(self.stateEndsAt, now)
 	end
 end
 
@@ -691,17 +929,25 @@ function Run.tick(self: Run, now: number)
 			Encounter.drain(self.encounter :: Encounter.Encounter)
 		end
 		if now >= self.stateEndsAt then
-			openDraft(self, now)
+			local cur = self.current :: CurrentNode
+			openDraft(self, now, if cur.kind == "boss" then "boss" elseif cur.kind == "elite" then "elite" else "fight")
 		end
 	elseif state == "draft" then
-		local allPicked = true
-		for _, m in Run.activeMembers(self) do
-			if not m.picked then
-				allPicked = false
-			end
-		end
-		if allPicked or now >= self.stateEndsAt then
+		if everyoneDone(self) or now >= self.stateEndsAt then
 			closeDraft(self, now)
+		end
+	elseif state == "map" then
+		if #Run.activeMembers(self) == 0 then
+			return
+		end
+		-- A forced single step waits out its short preview.
+		local forced = #self.choices <= 1
+		if (not forced and everyoneDone(self)) or now >= self.stateEndsAt then
+			closeMap(self, now)
+		end
+	elseif state == "rest" then
+		if everyoneDone(self) or now >= self.stateEndsAt then
+			closeRest(self, now)
 		end
 	end
 end
@@ -712,11 +958,10 @@ function Run.drain(self: Run): { { [string]: any } }
 	return out
 end
 
--- Honest wait estimate for a newcomer: time until the current fight is
--- likely to end, from the monster's remaining HP and the party's observed
--- damage rate, as a range. Nil when no estimate is possible yet.
+-- Honest wait estimate for a newcomer: time until the next boundary where
+-- they can be admitted, as a range. Nil when no estimate is possible yet.
 function Run.waitEstimate(self: Run, now: number): (number?, number?)
-	if self.state == "draft" then
+	if self.state == "draft" or self.state == "map" or self.state == "rest" then
 		return 0, 0
 	end
 	if self.state == "reward" then
@@ -754,21 +999,33 @@ function Run.snapshot(self: Run, now: number): { [string]: any }
 				picked = m.picked,
 				rerolls = m.rerolls,
 				recipient = m.recipient,
+				vote = m.vote,
+				restChoice = if m.restChoice then (if string.sub(m.restChoice, 1, 5) == "train" then "train" else "heal") else nil,
 				stats = table.clone(m.stats),
 			})
 		end
 	end
 	local lo, hi = Run.waitEstimate(self, now)
+	local camp = Run.campaignDef(self)
+	local act = camp.acts[self.act]
 	return {
 		id = self.id,
 		hostUid = self.hostUid,
+		campaign = self.campaign,
 		mode = self.mode,
 		condition = self.condition,
 		modifiers = self.modifiers,
 		privacy = self.privacy,
 		index = self.index,
-		total = if self.mode == "test" then 1 else Route.count(),
-		leg = Run.legOf(self, self.index),
+		act = self.act,
+		acts = #camp.acts,
+		actName = if act then act.name else "",
+		map = if self.map and self.mode ~= "test" then MapGen.view(self.map :: MapGen.ActMap) else nil,
+		atNode = self.atNode,
+		path = table.clone(self.path),
+		choices = table.clone(self.choices),
+		current = if self.current then table.clone(self.current :: any) else nil,
+		draftKind = self.draftKind,
 		state = self.state,
 		stateEndsAt = self.stateEndsAt,
 		introLength = self.introLength,

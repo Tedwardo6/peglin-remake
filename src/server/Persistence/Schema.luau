@@ -10,7 +10,10 @@ local Config = require(Shared.Config)
 export type Checkpoint = {
 	runSeed: string,
 	kit: string,
-	completed: number, -- last confirmed completed encounter index
+	completed: number, -- nodes completed when the checkpoint was taken
+	campaign: string?,
+	act: number?, -- act to resume in
+	atNode: string?, -- last completed node in that act (nil = act start)
 	rack: { string },
 	components: { string },
 	ballLevels: { [string]: number },

@@ -9,8 +9,10 @@
 
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
 
 local Theme = require(script.Parent.Theme)
+local Ornament = require(script.Parent.Ornament)
 local Audio = require(script.Parent.Parent.Juice.Audio)
 
 local C = Theme.Color
@@ -18,6 +20,33 @@ local C = Theme.Color
 local Kit = {}
 
 Kit.Settings = { reducedMotion = false }
+
+-- Iridescent rims: every registered gradient drifts together from one
+-- per-frame update (cheap; stops when its owner is destroyed).
+local shimmering: { [UIGradient]: number } = {}
+local shimmerT = 0
+RunService.RenderStepped:Connect(function(dt)
+	if Kit.Settings.reducedMotion then
+		return
+	end
+	shimmerT += dt
+	for g, speed in shimmering do
+		if g.Parent == nil then
+			shimmering[g] = nil
+		else
+			g.Rotation = (shimmerT * speed) % 360
+		end
+	end
+end)
+
+function Kit.shimmer(parent: Instance, speed: number?, colors: ColorSequence?): UIGradient
+	local g = Instance.new("UIGradient")
+	g.Color = colors or Theme.Iridescent
+	g.Rotation = 0
+	g.Parent = parent
+	shimmering[g] = speed or 40
+	return g
+end
 
 export type Props = { [string]: any }
 
@@ -75,7 +104,7 @@ function Kit.label(props: Props): TextLabel
 	local size = props.TextSize or 22
 	local label = Kit.new("TextLabel", {
 		BackgroundTransparency = 1,
-		FontFace = props.Bold and Theme.FontBold or Theme.Font,
+		FontFace = if props.Heavy then Theme.FontHeavy elseif props.Title then (if props.Bold then Theme.FontTitleBold else Theme.FontTitle) elseif props.Bold then Theme.FontBold else Theme.Font,
 		TextColor3 = props.TextColor3 or C.text,
 		TextSize = size,
 		TextScaled = props.TextScaled or false,
@@ -101,10 +130,39 @@ function Kit.label(props: Props): TextLabel
 	return label
 end
 
+-- Ornament ------------------------------------------------------------------
+
+-- A soft coloured glow around a frame (rarity / focus / danger).
+function Kit.glow(parent: Instance, color: Color3, outset: number?): Frame
+	return Ornament.glow(parent, color, outset)
+end
+
+-- Panels (all ornament is built from GUI objects, see UI/Ornament):
+--   Style "iron"   (default) iron band with gold corner rivets, dark interior
+--   Style "ornate" heavier band with a groove and gem bosses (screens, modals)
+--   Style "slot"   an inset item slot (Color = C.panelLight picks this)
+--   Style "round"  a round seal in a spiked iron ring (Radius >= 26)
+--   Style "chip"   a small coloured plate (Radius 12..25)
+-- `StrokeColor` adds a glow in that colour. The returned Frame's
+-- BackgroundColor3 is the interior colour, so callers can still recolour it.
 function Kit.panel(props: Props): Frame
+	local style: string = props.Style or ""
+	if style == "" then
+		local r = props.Radius or 0
+		if r >= 26 then
+			style = "round"
+		elseif r >= 12 then
+			style = "chip"
+		elseif props.Color == C.panelLight then
+			style = "slot"
+		else
+			style = "iron"
+		end
+	end
 	local f = Kit.new("Frame", {
 		BackgroundColor3 = props.Color or C.panel,
 		BackgroundTransparency = props.Transparency or 0,
+		BorderSizePixel = 0,
 		Size = props.Size or UDim2.fromOffset(200, 100),
 		Position = props.Position or UDim2.new(),
 		AnchorPoint = props.AnchorPoint or Vector2.zero,
@@ -114,16 +172,64 @@ function Kit.panel(props: Props): Frame
 		Visible = if props.Visible == nil then true else props.Visible,
 		Parent = props.Parent,
 	})
-	Kit.corner(props.Radius or 14).Parent = f
-	Kit.stroke(props.StrokeThickness or Theme.Stroke.ui, props.StrokeColor or C.ink).Parent = f
-	if props.Gradient ~= false then
-		Kit.new("UIGradient", {
-			Rotation = 90,
-			Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(205, 210, 235)),
-			Parent = f,
-		})
+	if props.StrokeColor then
+		Ornament.glow(f, props.StrokeColor, if style == "chip" then 3 else 7)
+	end
+	local px = if props.Size then math.min(props.Size.X.Offset, props.Size.Y.Offset) else 0
+	if style == "round" then
+		f.BackgroundTransparency = 1
+		Ornament.seal(f, math.max(24, px), if props.Color and props.Color ~= C.ink then props.Color:Lerp(Color3.fromRGB(30, 22, 38), 0.4) else nil)
+	elseif style == "slot" then
+		f.BackgroundColor3 = if props.Color and props.Color ~= C.panelLight then props.Color else Color3.fromRGB(30, 25, 28)
+		Ornament.well(f)
+	elseif style == "chip" then
+		Kit.new("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(120, 110, 120)), Parent = f })
+		Ornament.ironFrame(f, 3, false, false)
+	else
+		local ornate = style == "ornate"
+		Ornament.interior(f)
+		Ornament.ironFrame(f, props.Band or (if ornate then 9 else 6), ornate, props.Corners)
 	end
 	return f
+end
+
+-- A heading on an iron plaque with diamond caps (the references' "CHARACTER").
+function Kit.plaque(props: Props): Frame
+	local h = props.Height or 54
+	local holder = Kit.new("Frame", {
+		Name = props.Name or "Plaque",
+		BackgroundTransparency = 1,
+		Size = props.Size or UDim2.fromOffset(360, h),
+		Position = props.Position or UDim2.new(),
+		AnchorPoint = props.AnchorPoint or Vector2.zero,
+		ZIndex = props.ZIndex or 1,
+		Parent = props.Parent,
+	})
+	Ornament.plaque(holder, h)
+	local label = Kit.label({
+		Text = string.upper(props.Text or ""),
+		Heavy = true,
+		TextSize = props.TextSize or math.floor(h * 0.42),
+		TextColor3 = props.TextColor3 or C.gold,
+		Size = UDim2.new(1, -math.floor(h * 1.9), 1, -math.floor(h * 0.46)),
+		Position = UDim2.fromScale(0.5, 0.5),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		TextScaled = true,
+		MaxTextSize = props.TextSize or math.floor(h * 0.42),
+		ZIndex = 1,
+		Parent = holder,
+	})
+	label.Name = "Title"
+	return holder
+end
+
+-- A round portrait seal; returns the seal and the inner holder to put an
+-- image or viewport in.
+function Kit.portrait(props: Props): (Frame, Frame)
+	local f = Kit.panel({ Name = props.Name or "Portrait", Size = props.Size or UDim2.fromOffset(84, 84), Position = props.Position, AnchorPoint = props.AnchorPoint, Radius = 999, Style = "round", ZIndex = props.ZIndex, Parent = props.Parent })
+	local inner = Kit.new("Frame", { Name = "Face", BackgroundTransparency = 1, Size = UDim2.fromScale(0.86, 0.86), Position = UDim2.fromScale(0.5, 0.5), AnchorPoint = Vector2.new(0.5, 0.5), ClipsDescendants = true, ZIndex = 1, Parent = f })
+	Kit.corner(999).Parent = inner
+	return f, inner
 end
 
 -- Raised Button -----------------------------------------------------------
@@ -158,8 +264,8 @@ export type ButtonProps = {
 }
 
 function Kit.button(props: ButtonProps): Button
-	local faceColor = props.Face or C.gold
-	local depth = props.Depth or 8
+	local faceColor = props.Face or C.ember
+	local depth = props.Depth or 6
 	local travel = math.floor(depth * 0.6 + 0.5)
 	local enabled = true
 	local hovering = false
@@ -188,8 +294,8 @@ function Kit.button(props: ButtonProps): Button
 		Position = UDim2.fromOffset(0, 0),
 		Parent = content,
 	})
-	Kit.corner(14).Parent = body
-	local bodyStroke = Kit.stroke(Theme.Stroke.ui + 0.5)
+	Kit.corner(3).Parent = body
+	local bodyStroke = Kit.stroke(Theme.Stroke.ui, C.ink)
 	bodyStroke.Parent = body
 	local face: Frame = Kit.new("Frame", {
 		Name = "Face",
@@ -198,22 +304,38 @@ function Kit.button(props: ButtonProps): Button
 		Position = UDim2.fromOffset(0, 0),
 		Parent = body,
 	})
-	Kit.corner(13).Parent = face
+	Kit.corner(3).Parent = face
+	-- Hover rim: a thin gold line inside the face edge.
+	local rim = Kit.new("UIStroke", {
+		Thickness = 1.5,
+		Color = C.gold,
+		Transparency = 1,
+		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+		Parent = face,
+	})
 	-- Inset shine along the top of the face.
 	local shine: Frame = Kit.new("Frame", {
 		Name = "Shine",
 		BackgroundColor3 = Color3.new(1, 1, 1),
-		BackgroundTransparency = 0.55,
-		Size = UDim2.new(1, -14, 0, 5),
-		Position = UDim2.fromOffset(7, 4),
+		BackgroundTransparency = 0.86,
+		Size = UDim2.new(1, -10, 0.42, 0),
+		Position = UDim2.fromOffset(5, 3),
 		Parent = face,
 	})
-	Kit.corner(3).Parent = shine
+	Kit.corner(2).Parent = shine
 	Kit.new("UIGradient", {
 		Rotation = 90,
-		Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(225, 225, 235)),
+		Transparency = NumberSequence.new(0, 1),
+		Parent = shine,
+	})
+	Kit.new("UIGradient", {
+		Rotation = 90,
+		Color = ColorSequence.new(Color3.fromRGB(220, 208, 198), Color3.fromRGB(78, 68, 70)),
 		Parent = face,
 	})
+	-- An iron band around the button (no corner bosses at button size).
+	local bh = if props.Size then props.Size.Y.Offset else 64
+	Ornament.ironFrame(body, if bh >= 90 then 5 else 4, false, false)
 	local text = props.Text or ""
 	if props.Icon then
 		text = props.Icon .. "  " .. text
@@ -234,6 +356,12 @@ function Kit.button(props: ButtonProps): Button
 		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
 		Parent = face,
 	})
+	-- Selected: a cyan rarity glow around the whole button.
+	local selectGlow: Frame? = Ornament.glow(content, C.cyan, 6)
+	if selectGlow then
+		selectGlow.Visible = false
+		selectGlow.ZIndex = 3
+	end
 
 	local function apply(t: number)
 		local pressed = pressing and enabled
@@ -242,6 +370,7 @@ function Kit.button(props: ButtonProps): Button
 			targetScale = 1
 		end
 		Kit.tween(scale, t, { Scale = targetScale })
+		Kit.tween(rim, t, { Transparency = if hovering and enabled then 0.1 else 1 })
 		-- Face moves down; the silhouette top follows; the bottom edge stays put.
 		local off = if pressed then travel else 0
 		Kit.tween(body, t, { Position = UDim2.fromOffset(0, off), Size = UDim2.new(1, 0, 1, -off) })
@@ -342,7 +471,11 @@ function Kit.button(props: ButtonProps): Button
 		end,
 		setSelected = function(on: boolean)
 			selected = on
-			Kit.tween(selectRing, 0.12, { Thickness = if selected then 4 else 0 })
+			if selectGlow then
+				selectGlow.Visible = selected
+			else
+				Kit.tween(selectRing, 0.12, { Thickness = if selected then 4 else 0 })
+			end
 		end,
 		destroy = function()
 			focusConn:Disconnect()
@@ -364,7 +497,7 @@ export type Bar = {
 function Kit.bar(props: Props): Bar
 	local root: Frame = Kit.new("Frame", {
 		Name = props.Name or "Bar",
-		BackgroundColor3 = C.ink,
+		BackgroundColor3 = Color3.fromRGB(6, 6, 18),
 		Size = props.Size or UDim2.fromOffset(220, 26),
 		Position = props.Position or UDim2.new(),
 		AnchorPoint = props.AnchorPoint or Vector2.zero,
@@ -372,36 +505,32 @@ function Kit.bar(props: Props): Bar
 		ZIndex = props.ZIndex or 1,
 		Parent = props.Parent,
 	})
-	Kit.corner(props.Radius or 10).Parent = root
-	Kit.stroke(Theme.Stroke.ui).Parent = root
+	root.BackgroundColor3 = Color3.fromRGB(10, 7, 11)
+	root.BorderSizePixel = 0
 	local inner: Frame = Kit.new("Frame", {
 		Name = "Inner",
 		BackgroundTransparency = 1,
-		Size = UDim2.new(1, -6, 1, -6),
-		Position = UDim2.fromOffset(3, 3),
+		Size = UDim2.new(1, -4, 1, -4),
+		Position = UDim2.fromOffset(2, 2),
 		ClipsDescendants = true,
 		Parent = root,
 	})
-	Kit.corner((props.Radius or 10) - 3).Parent = inner
+	Kit.corner(math.max(2, (props.Radius or 5) - 2)).Parent = inner
 	local ghost: Frame = Kit.new("Frame", {
 		Name = "Ghost",
-		BackgroundColor3 = Color3.new(1, 1, 1),
+		BackgroundColor3 = Color3.fromRGB(255, 230, 200),
 		Size = UDim2.fromScale(1, 1),
 		Parent = inner,
 	})
-	Kit.corner((props.Radius or 10) - 3).Parent = ghost
+	Kit.corner(math.max(2, (props.Radius or 5) - 2)).Parent = ghost
 	local fill: Frame = Kit.new("Frame", {
 		Name = "Fill",
 		BackgroundColor3 = props.Color or C.hull,
 		Size = UDim2.fromScale(1, 1),
 		Parent = inner,
 	})
-	Kit.corner((props.Radius or 10) - 3).Parent = fill
-	Kit.new("UIGradient", {
-		Rotation = 90,
-		Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(200, 200, 210)),
-		Parent = fill,
-	})
+	Kit.corner(math.max(2, (props.Radius or 5) - 2)).Parent = fill
+
 	local overlay: Frame = Kit.new("Frame", {
 		Name = "Overlay",
 		BackgroundColor3 = props.OverlayColor or C.shield,
@@ -409,7 +538,36 @@ function Kit.bar(props: Props): Bar
 		Size = UDim2.fromScale(0, 1),
 		Parent = inner,
 	})
-	Kit.corner((props.Radius or 10) - 3).Parent = overlay
+	Kit.corner(math.max(2, (props.Radius or 5) - 2)).Parent = overlay
+	-- Glossy liquid: light top, deep bottom, a gloss band and a few glints.
+	local function liquid(host: Frame, color: Color3, glints: boolean)
+		host.BackgroundColor3 = Color3.new(1, 1, 1)
+		Kit.new("UIGradient", {
+			Rotation = 90,
+			Color = ColorSequence.new({
+				ColorSequenceKeypoint.new(0, Theme.light(color, 0.45)),
+				ColorSequenceKeypoint.new(0.35, color),
+				ColorSequenceKeypoint.new(1, Theme.deep(color, 0.45)),
+			}),
+			Parent = host,
+		})
+		local gloss = Kit.new("Frame", { Name = "Gloss", BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.55, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0.32, 0), Position = UDim2.fromScale(0, 0.1), Parent = host })
+		Kit.new("UIGradient", { Rotation = 90, Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.3), NumberSequenceKeypoint.new(1, 1) }), Parent = gloss })
+		if glints then
+			local r = Random.new(7)
+			for _ = 1, 9 do
+				local g = Kit.new("Frame", { Name = "Glint", BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = r:NextNumber(0.05, 0.45), BorderSizePixel = 0, Size = UDim2.fromOffset(2, 2), Rotation = 45, Position = UDim2.fromScale(r:NextNumber(0.03, 0.97), r:NextNumber(0.25, 0.8)), Parent = host })
+				local _ = g
+			end
+		end
+	end
+	local fillColor = props.Color or C.hull
+	liquid(fill, fillColor, true)
+	liquid(overlay, props.OverlayColor or C.shield, false)
+	overlay.BackgroundTransparency = 0.1
+	ghost.BackgroundColor3 = Color3.fromRGB(255, 236, 214)
+	-- Stone housing on top of the channel, under the number.
+	Ornament.housing(root, if props.Size then props.Size.Y.Offset else 26, 2)
 	local text = Kit.label({
 		Text = "",
 		TextSize = props.TextSize or 18,

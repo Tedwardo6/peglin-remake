@@ -4,7 +4,7 @@
 
 local Build = {}
 
-Build.INK = Color3.fromRGB(8, 15, 56)
+Build.INK = Color3.fromRGB(4, 4, 16)
 
 export type Opts = {
 	material: Enum.Material?,

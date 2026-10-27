@@ -1,6 +1,8 @@
-# Event map v1
+# Event map v2
 
-Implements plan §6 and the handbook's required onboarding and progression funnels (chapter 15). Code: `src/server/Analytics/Funnels.luau`; wiring: `src/server/Run/RunManager.luau`. `Config.EVENT_MAP_VERSION = 1`, `Config.BUILD_VERSION = 0.1.0`.
+Implements plan §6 and the handbook's required onboarding and progression funnels (chapter 15). Code: `src/server/Analytics/Funnels.luau`; wiring: `src/server/Run/RunManager.luau`. `Config.EVENT_MAP_VERSION = 2`, `Config.BUILD_VERSION = 0.2.0`.
+
+**What changed in v2 (RPG redesign):** players now land in the lobby hall and choose to begin, so `first_launch` timing includes lobby and path-map time; compare v1 and v2 numbers separately. `leg_N` and `boss_N` now mean **act** N and that act's boss. Event names and step numbers are otherwise unchanged.
 
 ## Scope and identity
 

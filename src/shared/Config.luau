@@ -4,10 +4,10 @@
 -- measured result. Change values here, not inline in systems.
 
 local Config = {
-	GAME_NAME = "Cabinet (working title)",
+	GAME_NAME = "Abyss Pegs (working title)",
 	-- Bumped whenever a rule, board, or event-map change makes old logs incomparable.
-	BUILD_VERSION = "0.1.0",
-	EVENT_MAP_VERSION = 1,
+	BUILD_VERSION = "0.2.0",
+	EVENT_MAP_VERSION = 2,
 
 	Sim = {
 		STEP_HZ = 60, -- fixed simulation steps per second (plan §9 H)
@@ -42,6 +42,13 @@ local Config = {
 		BOSS_REPAIR_FRACTION = 0.4, -- baseline repair after bosses (plan §4)
 		HP_SCALE_PER_EXTRA = 0.75, -- enemy HP = solo × (1 + 0.75 × (active − 1))
 		MIN_LAUNCH_INTERVAL = 0.25, -- request-frequency floor (seconds)
+		-- A shot's damage builds on the hero while the ball flies; the hero
+		-- strikes once the ball drains, this long after the shot ends.
+		STRIKE_DELAY = 0.55,
+		ELITE_HP_MULT = 1.3,
+		ELITE_DAMAGE_MULT = 1.2,
+		ELITE_SPOILS_MAX_HULL = 6, -- everyone's max hull after an elite win
+		REST_HEAL_FRACTION = 0.4,
 	},
 
 	Relay = {
@@ -50,9 +57,9 @@ local Config = {
 	},
 
 	Run = {
-		LEGS = 3,
-		ENCOUNTERS_PER_LEG = 3, -- two ordinary + one boss
 		DRAFT_SECONDS = 20,
+		MAP_SECONDS = 20, -- party path vote
+		REST_SECONDS = 20,
 		RACK_SIZE = 3,
 		REROLLS_PER_LEG = 1,
 	},
