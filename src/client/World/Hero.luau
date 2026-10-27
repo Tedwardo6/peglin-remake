@@ -47,6 +47,7 @@ export type Hero = typeof(setmetatable(
 		banked: number,
 		bankShownAt: number,
 		idleTrack: AnimationTrack?,
+		tracks: { [string]: AnimationTrack },
 		t: number,
 		conn: RBXScriptConnection?,
 		gearParts: { BasePart },
@@ -140,8 +141,8 @@ local function dress(self: Hero, char: Model)
 	elseif self.kit == "guard" then
 		-- Warden: helm with a glowing visor, round shield, short blade.
 		if head then
-			local helm = part(Build.block(nil, Vector3.new(1.45, 1.35, 1.45), CFrame.new(), STEEL, { material = Enum.Material.Metal }))
-			weldTo(helm, head, CFrame.new(0, 0.15, 0))
+			local helm = part(Build.ellipsoid(nil, Vector3.new(1.5, 1.45, 1.5), CFrame.new(), STEEL, { material = Enum.Material.Metal }))
+			weldTo(helm, head, CFrame.new(0, 0.12, 0))
 			local visor = part(Build.block(nil, Vector3.new(1.0, 0.16, 0.1), CFrame.new(), col, { material = Enum.Material.Neon }))
 			weldTo(visor, head, CFrame.new(0, 0.2, -0.74))
 			local crest = part(Build.wedge(nil, Vector3.new(0.18, 0.7, 1.4), CFrame.new(), col, { material = Enum.Material.Neon }))
@@ -168,12 +169,14 @@ local function dress(self: Hero, char: Model)
 	else
 		-- Duelist: hood and twin glowing daggers.
 		if head then
-			local hood = part(Build.block(nil, Vector3.new(1.5, 1.4, 1.5), CFrame.new(), COSMIC, { material = Enum.Material.Fabric }))
-			weldTo(hood, head, CFrame.new(0, 0.18, 0.12))
-			local peak = part(Build.wedge(nil, Vector3.new(1.3, 0.8, 1.2), CFrame.new(), COSMIC, { material = Enum.Material.Fabric }))
-			weldTo(peak, head, CFrame.new(0, 1.1, 0.25))
-			local band = part(Build.block(nil, Vector3.new(1.55, 0.14, 1.55), CFrame.new(), col, { material = Enum.Material.Neon }))
-			weldTo(band, head, CFrame.new(0, -0.32, 0.12))
+			-- An open hood: a shell behind the head that frames the face.
+			local hood = part(Build.ellipsoid(nil, Vector3.new(1.75, 1.75, 1.6), CFrame.new(), COSMIC, { material = Enum.Material.Fabric }))
+			weldTo(hood, head, CFrame.new(0, 0.18, 0.42))
+			local peak = part(Build.ellipsoid(nil, Vector3.new(0.9, 1.1, 0.9), CFrame.new(), COSMIC, { material = Enum.Material.Fabric }))
+			weldTo(peak, head, CFrame.new(0, 0.85, 0.75) * CFrame.Angles(math.rad(-35), 0, 0))
+			-- Glowing scarf at the neck in the seat colour.
+			local scarf = part(Build.ellipsoid(nil, Vector3.new(1.5, 0.34, 1.35), CFrame.new(), col, { material = Enum.Material.Neon }))
+			weldTo(scarf, head, CFrame.new(0, -0.72, 0.05))
 		end
 		for _, hand in { rHand, lHand } do
 			if hand then
@@ -290,6 +293,7 @@ function Hero.new(parent: Instance, uid: number, kit: string, color: Color3, spo
 	self.bankShownAt = 0
 	self.t = math.random() * 10
 	self.gearParts = {}
+	self.tracks = {}
 	self.fallback = false
 	self.reducedMotion = false
 
@@ -315,32 +319,45 @@ function Hero.new(parent: Instance, uid: number, kit: string, color: Color3, spo
 		end
 		dress(self, m)
 		m.Parent = parent
-		-- Idle from the avatar's own animation set.
+		-- Motion from the avatar's own animation set: idle, tool slash for the
+		-- strike, point for support casts, cheer for victories.
 		local anims = m:FindFirstChild("AnimIds")
-		local idleId: string? = nil
-		if anims then
-			for _, v in anims:GetChildren() do
-				if v:IsA("StringValue") and string.find(string.lower(v.Name), "idle", 1, true) then
-					idleId = v.Value
-					break
-				end
-			end
+		local function idOf(key: string): string?
+			local v = anims and anims:FindFirstChild(key)
+			return if v and v:IsA("StringValue") then v.Value else nil
 		end
-		if hum and idleId then
+		if hum then
 			local animator = hum:FindFirstChildOfClass("Animator") or Instance.new("Animator")
 			animator.Parent = hum
-			local a = Instance.new("Animation")
-			a.AnimationId = idleId
-			local ok, track = pcall(function()
-				return (animator :: Animator):LoadAnimation(a)
-			end)
-			if ok and track then
-				track.Looped = true
-				track:Play(0.2)
-				self.idleTrack = track
+			local function load(name: string, id: string?, looped: boolean, priority: Enum.AnimationPriority): AnimationTrack?
+				if id == nil then
+					return nil
+				end
+				local a = Instance.new("Animation")
+				a.AnimationId = id
+				local ok, track = pcall(function()
+					return (animator :: Animator):LoadAnimation(a)
+				end)
+				if ok and track then
+					track.Looped = looped
+					track.Priority = priority
+					self.tracks[name] = track
+					return track
+				end
+				return nil
 			end
+			local idle = load("idle", idOf("idle_Animation1"), true, Enum.AnimationPriority.Idle)
+			if idle then
+				idle:Play(0.2)
+				self.idleTrack = idle
+			end
+			load("slash", idOf("toolslash_ToolSlashAnim"), false, Enum.AnimationPriority.Action)
+			load("lunge", idOf("toollunge_ToolLungeAnim"), false, Enum.AnimationPriority.Action)
+			load("point", idOf("point_PointAnim"), false, Enum.AnimationPriority.Action)
+			load("cheer", idOf("cheer_CheerAnim"), false, Enum.AnimationPriority.Action)
+			load("wave", idOf("wave_WaveAnim"), false, Enum.AnimationPriority.Action)
 		end
-		local rightArm = m:FindFirstChild("RightUpperArm")
+		local rightArm = if self.tracks.slash then nil else m:FindFirstChild("RightUpperArm")
 		if rightArm then
 			local sh = rightArm:FindFirstChild("RightShoulder")
 			if sh and sh:IsA("Motor6D") then
@@ -409,6 +426,10 @@ end
 function Hero.strike(self: Hero, impactIn: number, onImpact: () -> ())
 	local wind = math.max(0.05, impactIn)
 	self.lungeDir = 1
+	local anim = if self.kit == "guard" then (self.tracks.lunge or self.tracks.slash) else self.tracks.slash
+	if anim then
+		anim:Play(0.05, 1, 1.4)
+	end
 	task.delay(wind, function()
 		self.lungeDir = -1
 		self:clearBank()
@@ -418,6 +439,24 @@ end
 
 function Hero.castSupport(self: Hero)
 	self.cast = 1
+	local p = self.tracks.point
+	if p then
+		p:Play(0.1, 1, 1.3)
+	end
+end
+
+function Hero.cheer(self: Hero)
+	local c = self.tracks.cheer
+	if c then
+		c:Play(0.15)
+	end
+end
+
+function Hero.wave(self: Hero)
+	local w = self.tracks.wave
+	if w then
+		w:Play(0.15)
+	end
 end
 
 function Hero.hit(self: Hero)
