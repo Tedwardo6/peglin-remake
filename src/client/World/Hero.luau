@@ -140,14 +140,25 @@ local function dress(self: Hero, char: Model)
 			sparkleOn(orb, col)
 		end
 	elseif self.kit == "guard" then
-		-- Warden: helm with a glowing visor, round shield, short blade.
+		-- Warden: open-faced helm (the avatar's face stays visible), crest,
+		-- pauldrons, round shield, short blade.
 		if head then
-			local helm = part(Build.ellipsoid(nil, Vector3.new(1.5, 1.45, 1.5), CFrame.new(), STEEL, { material = Enum.Material.Metal }))
-			weldTo(helm, head, CFrame.new(0, 0.12, 0))
-			local visor = part(Build.block(nil, Vector3.new(1.0, 0.16, 0.1), CFrame.new(), col, { material = Enum.Material.Neon }))
-			weldTo(visor, head, CFrame.new(0, 0.2, -0.74))
-			local crest = part(Build.wedge(nil, Vector3.new(0.18, 0.7, 1.4), CFrame.new(), col, { material = Enum.Material.Neon }))
-			weldTo(crest, head, CFrame.new(0, 1.1, 0.1))
+			local helm = part(Build.ellipsoid(nil, Vector3.new(1.62, 1.62, 1.5), CFrame.new(), STEEL, { material = Enum.Material.Metal }))
+			weldTo(helm, head, CFrame.new(0, 0.2, 0.4))
+			local brow = part(Build.block(nil, Vector3.new(1.42, 0.2, 0.3), CFrame.new(), GOLD, { material = Enum.Material.Metal }))
+			weldTo(brow, head, CFrame.new(0, 0.62, -0.42))
+			local crest = part(Build.block(nil, Vector3.new(0.14, 0.42, 1.3), CFrame.new(), col, { material = Enum.Material.Neon }))
+			weldTo(crest, head, CFrame.new(0, 1.02, 0.28))
+		end
+		for _, armName in { "LeftUpperArm", "RightUpperArm" } do
+			local arm = char:FindFirstChild(armName) :: BasePart?
+			if arm then
+				local sx = if armName == "LeftUpperArm" then -1 else 1
+				local pad = part(Build.ellipsoid(nil, Vector3.new(1.15, 0.62, 1.15), CFrame.new(), STEEL, { material = Enum.Material.Metal }))
+				weldTo(pad, arm, CFrame.new(sx * 0.12, 0.42, 0))
+				local rimPad = part(Build.block(nil, Vector3.new(1.0, 0.1, 0.12), CFrame.new(), col, { material = Enum.Material.Neon }))
+				weldTo(rimPad, arm, CFrame.new(sx * 0.12, 0.2, -0.52))
+			end
 		end
 		if lHand then
 			local shield = part(Build.cylinder(nil, 0.2, 2.2, CFrame.new(), COSMIC, { material = Enum.Material.Metal }))

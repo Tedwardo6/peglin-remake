@@ -75,7 +75,7 @@ local function popup(parent: Instance, title: string, size: UDim2): (Frame, () -
 	local function close()
 		back:Destroy()
 	end
-	Kit.button({ Text = "✕", Size = UDim2.fromOffset(44, 44), Position = UDim2.new(1, -10, 0, 10), AnchorPoint = Vector2.new(1, 0), Face = C.panelLight, TextSize = 20, ZIndex = 33, OnActivated = close, Parent = panel })
+	Kit.button({ Text = "X", Size = UDim2.fromOffset(44, 44), Position = UDim2.new(1, -10, 0, 10), AnchorPoint = Vector2.new(1, 0), Face = C.panelLight, TextSize = 20, ZIndex = 33, OnActivated = close, Parent = panel })
 	Kit.popIn(panel)
 	return panel, close
 end
@@ -322,7 +322,7 @@ function LobbyMenu.new(parent: Instance, cb: Callbacks): Menu
 	end
 	local devButton: Kit.Button
 	local function openDev()
-		local panel = popup(parent, "DEVELOPER", UDim2.fromOffset(560, 300))
+		local panel, closeDev = popup(parent, "DEVELOPER", UDim2.fromOffset(560, 300))
 		Kit.label({ Text = "Test conditions: same board, HP, threat, upgrade and timing.", TextSize = 14, TextColor3 = C.textDim, Size = UDim2.new(1, -40, 0, 20), Position = UDim2.fromOffset(20, 58), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 32, Parent = panel })
 		for i, cond in { "solo", "duo_self", "duo_teammate" } do
 			Kit.button({
@@ -333,12 +333,16 @@ function LobbyMenu.new(parent: Instance, cb: Callbacks): Menu
 				TextSize = 16,
 				ZIndex = 32,
 				OnActivated = function()
+					closeDev()
 					cb.onDevTest(cond)
 				end,
 				Parent = panel,
 			})
 		end
-		Kit.button({ Text = "MONSTER GALLERY", Size = UDim2.new(1, -40, 0, 52), Position = UDim2.fromOffset(20, 146), Face = C.blueDeep, TextSize = 18, ZIndex = 32, OnActivated = cb.onGallery, Parent = panel })
+		Kit.button({ Text = "MONSTER GALLERY", Size = UDim2.new(1, -40, 0, 52), Position = UDim2.fromOffset(20, 146), Face = C.blueDeep, TextSize = 18, ZIndex = 32, OnActivated = function()
+			closeDev()
+			cb.onGallery()
+		end, Parent = panel })
 		local lines = {}
 		for i = math.max(1, #testHistory - 2), #testHistory do
 			local e = testHistory[i]
@@ -365,7 +369,7 @@ function LobbyMenu.new(parent: Instance, cb: Callbacks): Menu
 		Kit.stroke(2, Theme.slot(order)).Parent = pic
 		local p = Players:GetPlayerByUserId(m.uid)
 		local k = Kits.ById[m.kit] or Kits.ById.ricochet
-		Kit.label({ Text = (if p then p.DisplayName else "Hero") .. (if m.leader then "  ♛" else ""), TextSize = 16, Bold = true, TextColor3 = Theme.slot(order), Size = UDim2.new(1, -150, 0, 22), Position = UDim2.fromOffset(54, 4), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 9, Parent = row })
+		Kit.label({ Text = (if p then p.DisplayName else "Hero") .. (if m.leader then "  👑" else ""), TextSize = 16, Bold = true, TextColor3 = Theme.slot(order), Size = UDim2.new(1, -150, 0, 22), Position = UDim2.fromOffset(54, 4), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 9, Parent = row })
 		Kit.label({ Text = `{CLASS_GLYPH[k.id] or ""} {k.name}`, TextSize = 13, TextColor3 = C.textDim, Size = UDim2.new(1, -150, 0, 18), Position = UDim2.fromOffset(54, 26), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 9, Parent = row })
 		Kit.label({ Text = if m.ready then "READY" else "NOT READY", TextSize = 13, Bold = true, TextColor3 = if m.ready then C.green else C.red, Size = UDim2.fromOffset(90, 20), Position = UDim2.new(1, -96, 0.5, 0), AnchorPoint = Vector2.new(0, 0.5), ZIndex = 9, Parent = row })
 		local _ = leaderView

@@ -26,6 +26,7 @@ type Rig = {
 	role: Role,
 	side: number,
 	holder: number?, -- held items follow the arm that grips them
+	grip: Vector3?, -- where the holding hand meets the held item, model space
 	vel: Vector3?,
 	spin: Vector3?,
 	transparency: number,
@@ -199,6 +200,25 @@ function Monster.new(parent: Instance, enemyId: string, base: Vector3): Monster
 		pl.Range = math.max(10, look.height * 1.6)
 		pl.Parent = host
 		self.light = pl
+		if look.sparkle then
+			-- Gold-and-diamond glints across the body: quick, bright, tiny.
+			for _, r in self.rig do
+				if r.role == "body" or r.role == "head" or r.role == "held" then
+					local g = Instance.new("ParticleEmitter")
+					g.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+					g.Color = ColorSequence.new(Color3.fromRGB(255, 250, 220), Color3.fromRGB(255, 205, 90))
+					g.LightEmission = 1
+					g.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(0.3, 0.28 * scale + 0.12), NumberSequenceKeypoint.new(1, 0) })
+					g.Lifetime = NumberRange.new(0.25, 0.5)
+					g.Rate = if r.role == "body" then 14 else 5
+					g.Speed = NumberRange.new(0)
+					g.Rotation = NumberRange.new(0, 360)
+					g.RotSpeed = NumberRange.new(-90, 90)
+					g.ZOffset = 1
+					g.Parent = r.part
+				end
+			end
+		end
 	end
 	-- Armor bubble.
 	self.bubble = Build.ellipsoid(m, Vector3.new(look.height * 0.95, look.height * 1.1, look.height * 0.95), self.origin * CFrame.new(0, look.height * 0.5, 0), Color3.fromRGB(150, 180, 255), {
@@ -364,6 +384,14 @@ function Monster._joints(self: Monster)
 				end
 			end
 			r.holder = nearest
+			if nearest then
+				-- Grip: the point of the item nearest the holding arm's far end.
+				local a = self.rig[nearest]
+				local ab = boxOf(a)
+				local hand = Vector3.new((ab.min.X + ab.max.X) / 2, ab.min.Y + (ab.max.Y - ab.min.Y) * 0.15, (ab.min.Z + ab.max.Z) / 2)
+				local hb = boxOf(r)
+				r.grip = clampV(hand, hb.min, hb.max)
+			end
 			local _ = i
 		end
 	end
@@ -430,12 +458,17 @@ function Monster._step(self: Monster, dt: number)
 	local tele = self.teleS
 	local breathe = if rm then 0 else math.sin(t * 2.2)
 	local hover = if self.float then (if rm then 0 else math.sin(t * 1.3) * 0.35) + self.height * 0.06 else 0
+	if self.float then
+		-- Floaters gather upward on the wind-up and dive on the slam.
+		hover += tele * self.height * 0.1 - lunge * self.height * 0.08
+	end
 	local shake = if self.urgent and not rm then (math.random() - 0.5) * 0.12 else 0
 	-- Whole-body pose (model space): flinch leans away from the heroes
 	-- (+Z in model space is behind the monster), lunge leans in.
 	local lean = math.rad(self.flinch * 9 + self.stagger * 8 - lunge * 16 + tele * 6)
 	local bodyPose = CFrame.new(shake, rise + hover + breathe * 0.012 * self.height, self.flinch * 0.35 - lunge * 0.9) * rotAbout(self.hip, CFrame.Angles(lean, 0, 0))
 	local poses: { CFrame } = table.create(#self.rig)
+	local armPitch: { number } = table.create(#self.rig, 0)
 	for i, r in self.rig do
 		local pose = CFrame.identity
 		if r.role == "head" then
@@ -444,9 +477,14 @@ function Monster._step(self: Monster, dt: number)
 			-- Wind-up raises the arms forward/up; the slam drives them down.
 			local raise = tele * 80 + (if self.urgent then 10 else 0) - lunge * 25
 			local sway = if rm then 0 else math.sin(t * 1.6 + r.side) * 4
-			pose = rotAbout(r.pivot, CFrame.Angles(math.rad(raise + sway - self.flinch * 14), 0, math.rad(-r.side * (tele * 10 + breathe * 1.5))))
+			local pitch = math.rad(raise + sway - self.flinch * 14)
+			armPitch[i] = pitch
+			pose = rotAbout(r.pivot, CFrame.Angles(pitch, 0, math.rad(-r.side * (tele * 10 + breathe * 1.5))))
 		elseif r.role == "tentacle" then
-			pose = rotAbout(r.pivot, CFrame.Angles(math.rad((if rm then 0 else math.sin(t * 2 + r.side) * 7) + tele * 12 - lunge * 18), 0, math.rad(r.side * (if rm then 0 else math.sin(t * 1.4) * 8))))
+			-- Tentacles writhe; the wind-up flares them out, the slam whips them in.
+			local flare = r.side * (tele * 22 - lunge * 10)
+			local curl = (if rm then 0 else math.sin(t * 2 + r.side) * 7) + (if r.side == 0 then tele * 18 else tele * 8) - lunge * 18
+			pose = rotAbout(r.pivot, CFrame.Angles(math.rad(curl), 0, math.rad(flare + r.side * (if rm then 0 else math.sin(t * 1.4) * 8))))
 		elseif r.role == "body" then
 			pose = rotAbout(r.pivot, CFrame.Angles(math.rad(breathe * 1.2), 0, 0))
 		end
@@ -455,7 +493,11 @@ function Monster._step(self: Monster, dt: number)
 	for i, r in self.rig do
 		local pose = poses[i]
 		if r.role == "held" and r.holder then
-			pose = poses[r.holder :: number]
+			-- The item rides the hand but mostly stays upright (a staff is
+			-- raised, not swung flat), then thrusts forward on the slam.
+			local h = r.holder :: number
+			local grip = r.grip or r.base.Position
+			pose = poses[h] * rotAbout(grip, CFrame.Angles(-armPitch[h] * 0.8 - math.rad(lunge * 18), 0, 0))
 		end
 		local whole = if r.role == "leg" or r.role == "base" then CFrame.new(0, rise + (if self.float then hover else 0), 0) else bodyPose
 		parts[i] = r.part

@@ -269,10 +269,10 @@ local function contributionRows(parent: Frame, rows: { ResultRow }, y0: number, 
 		Kit.label({ Text = `{row.damage} dmg · {math.floor(pct * 100 + 0.5)}%`, TextSize = 14, Size = UDim2.new(0.42, 0, 0, 20), Position = UDim2.new(0.34, 0, 0, y + 3), ZIndex = 24, Parent = parent })
 		local support = {}
 		if row.sent > 0 then
-			table.insert(support, `✦{row.sent} empowers`)
+			table.insert(support, `🔮 {row.sent} empowers`)
 		end
 		if (row.guarded or 0) > 0 then
-			table.insert(support, `⛨{row.guarded} shield`)
+			table.insert(support, `🛡️ {row.guarded} shield`)
 		end
 		if (row.mended or 0) > 0 then
 			table.insert(support, `♥{row.mended} mended`)

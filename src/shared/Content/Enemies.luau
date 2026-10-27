@@ -24,6 +24,7 @@ export type Look = {
 	height: number, -- standing height on the battlefield, in studs
 	glow: Color3, -- psychedelic rim/aura colour
 	float: boolean?, -- hovers instead of standing
+	sparkle: boolean?, -- gold-and-diamond glints (bling)
 }
 
 export type Phase = { at: number, cycle: { ThreatDef }, cadence: number, label: string }
@@ -153,7 +154,7 @@ local LIST: { EnemyDef } = {
 		phases = {
 			{ at = 0.5, cycle = { slam(11), double(7) }, cadence = 16, label = "Enraged: faster threats" },
 		},
-		look = { model = "king", height = 12.5, glow = c(70, 140, 255) },
+		look = { model = "throne", height = 11, glow = c(90, 150, 255), sparkle = true },
 		blurb = "Alternates slams and double strikes. Speeds up at half health.",
 	},
 	{

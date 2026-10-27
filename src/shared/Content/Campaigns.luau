@@ -37,7 +37,7 @@ local LIST: { Campaign } = {
 	{
 		id = "abyss",
 		name = "The Dreaming Abyss",
-		blurb = "Descend through the Drowned Crypt, the Floating Isle and the Vortex Spire, and unseat the King Below.",
+		blurb = "Descend through the Drowned Crypt, the Floating Isle and the Vortex Spire, and close the Vortex Eye.",
 		recommended = "1–2 heroes",
 		acts = {
 			{
