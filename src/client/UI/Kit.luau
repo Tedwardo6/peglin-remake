@@ -173,7 +173,7 @@ function Kit.panel(props: Props): Frame
 		Parent = props.Parent,
 	})
 	if props.StrokeColor then
-		Ornament.glow(f, props.StrokeColor, if style == "chip" then 3 else 9)
+		Ornament.glow(f, props.StrokeColor, if style == "chip" then 3 else 7)
 	end
 	local px = if props.Size then math.min(props.Size.X.Offset, props.Size.Y.Offset) else 0
 	if style == "round" then

@@ -56,7 +56,7 @@ local function ring(parent: Instance, inset: number, thickness: number, color: C
 		Parent = parent,
 	})
 	if round then
-		new("UICorner", { CornerRadius = UDim.new(1, 0), Parent = f })
+		new("UICorner", { CornerRadius = UDim.new(0.5, 0), Parent = f })
 	end
 	local s = new("UIStroke", {
 		Thickness = thickness,
@@ -120,7 +120,7 @@ function Ornament.gem(parent: Instance, size: number, pos: UDim2, color: Color3?
 	new("UIStroke", { Thickness = math.max(1, size / 9), Color = Ornament.GOLD, LineJoinMode = Enum.LineJoinMode.Miter, Parent = g })
 	-- Glint.
 	local glint = new("Frame", { BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.15, BorderSizePixel = 0, Size = UDim2.fromScale(0.26, 0.26), Position = UDim2.fromScale(0.18, 0.18), ZIndex = z or 0, Parent = g })
-	new("UICorner", { CornerRadius = UDim.new(1, 0), Parent = glint })
+	new("UICorner", { CornerRadius = UDim.new(0.5, 0), Parent = glint })
 	return g
 end
 
@@ -151,7 +151,7 @@ function Ornament.ironFrame(host: Instance, t: number, ornate: boolean?, corners
 				Ornament.gem(host, math.floor(c * 0.56), pos, Ornament.GEM, 0)
 			else
 				local r = new("Frame", { Name = "Rivet", BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0, Size = UDim2.fromOffset(math.floor(c * 0.36), math.floor(c * 0.36)), Position = pos, AnchorPoint = Vector2.new(0.5, 0.5), ZIndex = 0, Parent = host })
-				new("UICorner", { CornerRadius = UDim.new(1, 0), Parent = r })
+				new("UICorner", { CornerRadius = UDim.new(0.5, 0), Parent = r })
 				new("UIGradient", { Color = ColorSequence.new(rgb(255, 226, 150), rgb(120, 76, 24)), Rotation = 50, Parent = r })
 				new("UIStroke", { Thickness = 1, Color = Ornament.EDGE, Parent = r })
 			end
@@ -232,7 +232,7 @@ function Ornament.seal(host: Frame, px: number, discColor: Color3?)
 		ZIndex = 0,
 		Parent = host,
 	})
-	new("UICorner", { CornerRadius = UDim.new(1, 0), Parent = disc })
+	new("UICorner", { CornerRadius = UDim.new(0.5, 0), Parent = disc })
 	new("UIGradient", { Color = ColorSequence.new(rgb(200, 190, 215), rgb(90, 80, 100)), Rotation = 90, Parent = disc })
 	ring(host, 0, th + 2, Ornament.EDGE, 0, nil, nil, true)
 	ring(host, 0, th, Color3.new(1, 1, 1), 0, IRON_SEQ, 90, true)
@@ -324,9 +324,9 @@ function Ornament.glow(host: Instance, color: Color3, outset: number?): Frame
 		ZIndex = 0,
 		Parent = host,
 	})
-	ring(g, 0, 6, color, 0.72)
-	ring(g, 2, 3, color, 0.3)
-	ring(g, 3, 1.5, Color3.new(1, 1, 1), 0.35)
+	ring(g, -2, 5, color, 0.82)
+	ring(g, 0, 3, color, 0.55)
+	ring(g, 1, 1.5, color, 0.15)
 	return g
 end
 
