@@ -1,8 +1,11 @@
 --!strict
--- Code-built monster with procedural animation: idle breathing and blinks,
--- threat wind-up, lunge, per-hit flinch, big-hit stagger, armor plating,
--- reveal, and a death burst. Built from the enemy's `look` data and kept in
--- one module so a modelled monster can replace it later.
+-- The monster on the battlefield, built from its generated 3D model
+-- (ReplicatedStorage.MonsterModels, rebuilt by the server from
+-- Content/MonsterModels). Each mesh part is animated procedurally about a
+-- joint: breathing idle, threat wind-up and slam, flinch per strike, armor
+-- bubble, reveal rising from the floor, and a dissolve on death. A
+-- psychedelic rim light and aura sit on top. Same interface as before, so
+-- gameplay code is unchanged.
 
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
@@ -12,14 +15,20 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Enemies = require(Shared.Content.Enemies)
 
 local Build = require(script.Parent.Build)
+local Layout = require(script.Parent.Layout)
+
+type Role = "body" | "head" | "armL" | "armR" | "leg" | "tentacle" | "held" | "base"
 
 type Rig = {
 	part: BasePart,
-	offset: CFrame, -- relative to the monster root, unscaled
-	size: Vector3,
-	group: string,
+	base: CFrame, -- relative to the model origin, already scaled
+	pivot: Vector3, -- joint where this piece meets the core, model space
+	role: Role,
+	side: number,
+	holder: number?, -- held items follow the arm that grips them
 	vel: Vector3?,
 	spin: Vector3?,
+	transparency: number,
 }
 
 local Monster = {}
@@ -30,151 +39,175 @@ export type Monster = typeof(setmetatable(
 		model: Model,
 		rig: { Rig },
 		base: Vector3,
-		scale: number,
+		origin: CFrame,
+		height: number,
+		float: boolean,
+		glow: Color3,
 		highlight: Highlight,
+		aura: ParticleEmitter?,
+		light: PointLight?,
+		bubble: BasePart,
+		hip: Vector3,
 		t: number,
 		telegraph: number,
+		teleS: number, -- smoothed wind-up actually shown
 		urgent: boolean,
-		flinchV: number,
 		flinch: number,
-		flinchDir: number,
+		flinchV: number,
 		stagger: number,
-		lunge: number,
 		lungeT: number,
 		reveal: number,
 		revealT: number,
 		dead: boolean,
 		deathT: number,
-		blink: number,
-		nextBlink: number,
 		flashT: number,
-		armorParts: { BasePart },
 		armorOn: boolean,
-		eyeGlow: number,
 		conn: RBXScriptConnection?,
 		reducedMotion: boolean,
-		mouthOpen: number,
-		hurt: number,
 		hidden: boolean,
+		fallback: boolean,
 	},
 	Monster
 ))
 
-local INK = Build.INK
+local function roleOf(name: string): (Role, number)
+	local n = string.lower(name)
+	local side = if string.find(n, "left", 1, true) then -1 elseif string.find(n, "right", 1, true) then 1 else 0
+	if string.find(n, "arm", 1, true) then
+		return (if side < 0 then "armL" else "armR"), side
+	elseif string.find(n, "leg", 1, true) or n == "roots" then
+		return "leg", side
+	elseif string.find(n, "tentacle", 1, true) or n == "tail" then
+		return "tentacle", side
+	elseif n == "head" or n == "hood" or n == "helm" or n == "crown" or string.find(n, "head", 1, true) then
+		return "head", side
+	elseif n == "staff" or n == "lance" or n == "goblet" then
+		return "held", side
+	elseif n == "throne" then
+		return "base", side
+	end
+	return "body", side
+end
+
+local function fallbackModel(): Model
+	-- A shadowy silhouette if the generated model hasn't arrived.
+	local m = Instance.new("Model")
+	local body = Build.ellipsoid(m, Vector3.new(3.4, 4.6, 2.6), CFrame.new(0, 2.6, 0), Color3.fromRGB(20, 16, 50))
+	body.Name = "body"
+	local head = Build.ball(m, 2, Vector3.new(0, 5.4, -0.4), Color3.fromRGB(26, 20, 60))
+	head.Name = "head"
+	for _, sx in { -1, 1 } do
+		local arm = Build.ellipsoid(m, Vector3.new(1, 3.4, 1), CFrame.new(sx * 2.1, 2.8, -0.2), Color3.fromRGB(20, 16, 50))
+		arm.Name = if sx < 0 then "left arm" else "right arm"
+		local eye = Build.ball(m, 0.4, Vector3.new(sx * 0.45, 5.5, -1.3), Color3.fromRGB(255, 140, 60), { material = Enum.Material.Neon })
+		eye.Name = "eye"
+	end
+	m:SetAttribute("Height", 6.4)
+	return m
+end
 
 function Monster.new(parent: Instance, enemyId: string, base: Vector3): Monster
 	local def = Enemies.ById[enemyId]
 	local look = def.look
 	local self = setmetatable({}, Monster) :: any
-	self.model = Build.model("Monster_" .. enemyId, parent)
-	self.rig = {}
 	self.base = base
-	self.scale = look.scale * 1.15
+	self.rig = {}
 	self.t = math.random() * 10
 	self.telegraph = 0
+	self.teleS = 0
 	self.urgent = false
-	self.flinchV = 0
 	self.flinch = 0
-	self.flinchDir = 1
+	self.flinchV = 0
 	self.stagger = 0
-	self.lunge = 0
-	self.lungeT = -1
+	self.lungeT = 99
 	self.reveal = 0
-	self.revealT = -1
+	self.revealT = 99
 	self.dead = false
-	self.deathT = -1
-	self.blink = 0
-	self.nextBlink = 2 + math.random() * 3
+	self.deathT = 0
 	self.flashT = 0
-	self.armorParts = {}
 	self.armorOn = false
-	self.eyeGlow = 0
 	self.reducedMotion = false
-	self.mouthOpen = 0
-	self.hurt = 0
 	self.hidden = false
+	self.float = look.float == true
+	self.glow = look.glow
 
-	local k = self.scale
-	local m = self.model
-	local function add(p: BasePart, group: string)
-		local rel = CFrame.new(base):ToObjectSpace(p.CFrame)
-		table.insert(self.rig, { part = p, offset = rel, size = p.Size, group = group })
-	end
-	local function at(x: number, y: number, z: number): CFrame
-		return CFrame.new(base + Vector3.new(x, y, z) * k)
-	end
-	local body = look.body
-	local belly = look.belly
-	local deep = Color3.new(body.R * 0.62, body.G * 0.62, body.B * 0.62)
-
-	-- Feet (grounded), arms, body, belly.
-	for _, sx in { -1, 1 } do
-		add(Build.ellipsoid(m, Vector3.new(2.4, 1.3, 2.8) * k, at(sx * 1.9, 0.65, 0.7), deep), "foot")
-		add(Build.ellipsoid(m, Vector3.new(1.7, 2.9, 1.7) * k, at(sx * 3.75, 3.6, 0.6) * CFrame.Angles(0, 0, sx * math.rad(-18)), body), if sx < 0 then "armL" else "armR")
-		add(Build.ellipsoid(m, Vector3.new(1.1, 1.0, 1.1) * k, at(sx * 4.25, 2.15, 0.9), belly), if sx < 0 then "handL" else "handR")
-	end
-	if look.horn == "shell" then
-		add(Build.ellipsoid(m, Vector3.new(7.4, 6.4, 4.6) * k, at(0, 4.6, -1.6), deep), "body")
-		for i = -1, 1 do
-			add(Build.block(m, Vector3.new(0.7, 4.6, 0.7) * k, at(i * 2.1, 5.2, -3.3) * CFrame.Angles(0, 0, math.rad(i * 18)), belly), "body")
-		end
-	end
-	add(Build.ellipsoid(m, Vector3.new(7.2, 6.6, 6.0) * k, at(0, 4.4, 0), body), "body")
-	add(Build.ellipsoid(m, Vector3.new(4.8, 4.0, 1.4) * k, at(0, 3.5, 2.55), belly), "body")
-
-	-- Head decorations.
-	if look.horn == "horns" then
-		for _, sx in { -1, 1 } do
-			add(Build.wedge(m, Vector3.new(0.9, 2.4, 1.6) * k, at(sx * 2.3, 7.9, 0.2) * CFrame.Angles(0, if sx < 0 then 0 else math.pi, math.rad(sx * -20)), Color3.fromRGB(255, 244, 214)), "head")
-		end
-	elseif look.horn == "antenna" then
-		for _, sx in { -1, 1 } do
-			add(Build.cylinder(m, 2.6 * k, 0.32 * k, at(sx * 1.2, 8.4, 0) * CFrame.Angles(0, 0, math.rad(90 + sx * -20)), deep), "head")
-			add(Build.ball(m, 0.95 * k, (at(sx * 1.65, 9.6, 0)).Position, Color3.fromRGB(255, 240, 110), { material = Enum.Material.Neon }), "head")
-		end
-	elseif look.horn == "spikes" then
-		for i = -1, 1 do
-			add(Build.wedge(m, Vector3.new(0.8, 1.9, 1.7) * k, at(i * 1.8, 7.9 - math.abs(i) * 0.45, -0.2) * CFrame.Angles(0, 0, math.rad(i * -15)), Color3.fromRGB(255, 250, 235)), "head")
-		end
-	elseif look.horn == "crown" then
-		add(Build.block(m, Vector3.new(4.2, 0.9, 3.0) * k, at(0, 7.6, 0), Color3.fromRGB(255, 205, 60)), "head")
-		for i = -1, 1 do
-			add(Build.wedge(m, Vector3.new(0.9, 1.5, 0.9) * k, at(i * 1.5, 8.6, 0.6), Color3.fromRGB(255, 205, 60)), "head")
-			add(Build.ball(m, 0.55 * k, (at(i * 1.5, 7.6, 1.55)).Position, if i == 0 then Color3.fromRGB(255, 60, 90) else Color3.fromRGB(80, 200, 255), { material = Enum.Material.Neon }), "head")
-		end
-	end
-
-	-- Eyes, pupils, glints, lids.
-	local n = look.eyes
-	local xs: { number } = if n == 1 then { 0 } elseif n == 2 then { -1.4, 1.4 } else { -2.0, 0, 2.0 }
-	local eyeD = if n == 1 then 2.8 elseif n == 2 then 2.0 else 1.6
-	for _, ex in xs do
-		add(Build.ball(m, (eyeD + 0.28) * k, (at(ex, 5.5, 2.45)).Position, INK), "eyeRim")
-		add(Build.ball(m, eyeD * k, (at(ex, 5.5, 2.62)).Position, Color3.new(1, 1, 1)), "eye")
-		add(Build.ball(m, eyeD * 0.5 * k, (at(ex, 5.42, 3.25 + eyeD * 0.12)).Position, INK), "pupil")
-		add(Build.ball(m, eyeD * 0.18 * k, (at(ex - eyeD * 0.12, 5.62, 3.55 + eyeD * 0.14)).Position, Color3.new(1, 1, 1)), "glint")
-		add(Build.ellipsoid(m, Vector3.new(eyeD * 1.08, eyeD * 0.6, eyeD * 1.02) * k, at(ex, 5.5 + eyeD * 0.62, 2.62), body), "lid")
-	end
-	-- Mouth.
-	if look.mouth == "flat" then
-		add(Build.block(m, Vector3.new(2.6, 0.38, 0.4) * k, at(0, 3.25, 3.15), INK), "mouth")
+	local folder = ReplicatedStorage:FindFirstChild("MonsterModels")
+	local src = if folder then folder:FindFirstChild(look.model) else nil
+	local m: Model
+	if src and src:IsA("Model") then
+		m = src:Clone()
+		self.fallback = false
 	else
-		add(Build.ellipsoid(m, Vector3.new(2.9, 1.15, 0.6) * k, at(0, 3.15, 3.0), INK), "mouth")
-		add(Build.ellipsoid(m, Vector3.new(1.4, 0.45, 0.3) * k, at(0, 2.85, 3.2), Color3.fromRGB(255, 110, 140)), "tongue")
-		if look.mouth == "fangs" then
-			for _, sx in { -1, 1 } do
-				add(Build.wedge(m, Vector3.new(0.35, 0.65, 0.3) * k, at(sx * 0.75, 3.35, 3.28) * CFrame.Angles(math.pi, 0, 0), Color3.new(1, 1, 1)), "fang")
-			end
+		m = fallbackModel()
+		self.fallback = true
+	end
+	m.Name = "Monster_" .. enemyId
+	local srcHeight = (m:GetAttribute("Height") :: number?) or 6
+	local scale = look.height / srcHeight
+	self.height = look.height
+	local rootPart = m:FindFirstChild("Root")
+	if rootPart then
+		rootPart:Destroy()
+	end
+	-- Facing: the model faces -Z; turn it toward the heroes (3/4 view).
+	local f = Layout.MONSTER_FACING
+	self.origin = CFrame.lookAt(base, base + f)
+	for _, d in m:GetDescendants() do
+		if d:IsA("BasePart") then
+			d.Anchored = true
+			d.CanCollide = false
+			d.CanQuery = false
+			d.CanTouch = false
+			local rel = d.CFrame -- model space (origin at the feet)
+			local scaled = CFrame.new(rel.Position * scale) * (rel - rel.Position)
+			d.Size = d.Size * scale
+			local role, side = roleOf(d.Name)
+			table.insert(self.rig, { part = d, base = scaled, pivot = scaled.Position, role = role, side = side, transparency = d.Transparency })
 		end
 	end
-	-- Armor plating (hidden until the monster armors up).
-	for i = -1, 1 do
-		local plate = Build.block(m, Vector3.new(2.1, 2.7, 0.5) * k, at(i * 2.2, 4.3, 3.0 - math.abs(i) * 0.7) * CFrame.Angles(0, math.rad(i * -28), 0), Color3.fromRGB(190, 205, 230), { transparency = 1, reflect = 0.15 })
-		add(plate, "armor")
-		table.insert(self.armorParts, plate)
-	end
+	Monster._joints(self)
+	m.Parent = parent
+	self.model = m
 
-	self.highlight = Build.outline(m)
+	-- Psychedelic rim light + white flash on strikes.
+	local hl = Instance.new("Highlight")
+	hl.Adornee = m
+	hl.FillColor = look.glow
+	hl.FillTransparency = 0.88
+	hl.OutlineColor = look.glow
+	hl.OutlineTransparency = 0.25
+	hl.DepthMode = Enum.HighlightDepthMode.Occluded
+	hl.Parent = m
+	self.highlight = hl
+	-- Aura motes and a soft glow.
+	local host = self.rig[1] and self.rig[1].part
+	if host then
+		local pe = Instance.new("ParticleEmitter")
+		pe.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+		pe.Color = ColorSequence.new(look.glow, Color3.fromRGB(255, 120, 230))
+		pe.LightEmission = 1
+		pe.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.35 * scale + 0.15), NumberSequenceKeypoint.new(1, 0) })
+		pe.Lifetime = NumberRange.new(1, 1.8)
+		pe.Rate = 10
+		pe.Speed = NumberRange.new(1, 2.5)
+		pe.SpreadAngle = Vector2.new(180, 180)
+		pe.Parent = host
+		self.aura = pe
+		local pl = Instance.new("PointLight")
+		pl.Color = look.glow
+		pl.Brightness = 1.2
+		pl.Range = math.max(10, look.height * 1.6)
+		pl.Parent = host
+		self.light = pl
+	end
+	-- Armor bubble.
+	self.bubble = Build.ellipsoid(m, Vector3.new(look.height * 0.95, look.height * 1.1, look.height * 0.95), self.origin * CFrame.new(0, look.height * 0.5, 0), Color3.fromRGB(150, 180, 255), {
+		material = Enum.Material.ForceField,
+		transparency = 1,
+		name = "ArmorBubble",
+	})
+
+	Monster._step(self, 0)
 	self.conn = RunService.RenderStepped:Connect(function(dt)
 		Monster._step(self, dt)
 	end)
@@ -191,19 +224,16 @@ function Monster.hit(self: Monster, damage: number, big: boolean)
 	if self.dead then
 		return
 	end
-	local power = math.clamp(damage / 12, 0.15, 1)
-	self.flinchV += power * 9
-	self.flinchDir = if math.random() < 0.5 then -1 else 1
-	self.hurt = math.min(1, self.hurt + power * 0.6)
+	local power = math.clamp(damage / 25, 0.2, 1.3)
+	self.flinchV = math.min(1.4, self.flinchV + power)
 	if big then
 		self.stagger = 1
 	end
-	self.flashT = 0.08 + power * 0.06
+	self.flashT = 0.07 + math.min(power, 1) * 0.08
 end
 
 function Monster.attack(self: Monster)
 	self.lungeT = 0
-	self.mouthOpen = 1
 end
 
 function Monster.setArmor(self: Monster, on: boolean)
@@ -211,21 +241,18 @@ function Monster.setArmor(self: Monster, on: boolean)
 		return
 	end
 	self.armorOn = on
-	for _, p in self.armorParts do
-		TweenService:Create(p, TweenInfo.new(0.3), { Transparency = if on then 0 else 1 }):Play()
-	end
+	TweenService:Create(self.bubble, TweenInfo.new(0.35), { Transparency = if on then 0.15 else 1 }):Play()
 end
 
--- Keeps the monster below its stage until a reveal starts.
 function Monster.hide(self: Monster)
 	self.hidden = true
+	Monster._step(self, 0)
 end
 
 function Monster.revealIn(self: Monster, seconds: number)
 	self.hidden = false
 	self.revealT = 0
-	self.reveal = seconds
-	self.mouthOpen = 1
+	self.reveal = math.max(0.05, seconds)
 end
 
 function Monster.die(self: Monster)
@@ -234,170 +261,241 @@ function Monster.die(self: Monster)
 	end
 	self.dead = true
 	self.deathT = 0
+	local center = self.base + Vector3.new(0, self.height * 0.5, 0)
 	for _, r in self.rig do
-		local dir = (r.part.Position - (self.base + Vector3.new(0, 4 * self.scale, 0)))
+		local dir = r.part.Position - center
 		if dir.Magnitude < 0.01 then
 			dir = Vector3.new(0, 1, 0)
 		end
-		r.vel = dir.Unit * (10 + math.random() * 12) + Vector3.new((math.random() - 0.5) * 6, 10 + math.random() * 8, 6 + math.random() * 6)
-		r.spin = Vector3.new(math.random() - 0.5, math.random() - 0.5, math.random() - 0.5) * 14
+		r.vel = dir.Unit * (4 + math.random() * 5) + Vector3.new(0, 3 + math.random() * 4, 2)
+		r.spin = Vector3.new(math.random() - 0.5, math.random() - 0.5, math.random() - 0.5) * 3
 	end
 	self.highlight.FillColor = Color3.new(1, 1, 1)
-	self.highlight.FillTransparency = 0.2
+	self.highlight.FillTransparency = 0.1
+	if self.aura then
+		local a = self.aura :: ParticleEmitter
+		a.Rate = 0
+		a:Emit(60)
+	end
+end
+
+-- Joints: where each limb's box overlaps the core's box (the seam the
+-- generator already hides), else the limb point nearest the core. Rotating
+-- about these keeps limbs attached through every pose.
+type Box = { min: Vector3, max: Vector3 }
+
+local function boxOf(r: Rig): Box
+	local cf = r.base
+	local h = r.part.Size / 2
+	-- Axis-aligned bounds of the rotated box.
+	local ex = Vector3.new(
+		math.abs(cf.RightVector.X) * h.X + math.abs(cf.UpVector.X) * h.Y + math.abs(cf.LookVector.X) * h.Z,
+		math.abs(cf.RightVector.Y) * h.X + math.abs(cf.UpVector.Y) * h.Y + math.abs(cf.LookVector.Y) * h.Z,
+		math.abs(cf.RightVector.Z) * h.X + math.abs(cf.UpVector.Z) * h.Y + math.abs(cf.LookVector.Z) * h.Z
+	)
+	return { min = cf.Position - ex, max = cf.Position + ex }
+end
+
+local function clampV(v: Vector3, lo: Vector3, hi: Vector3): Vector3
+	return Vector3.new(math.clamp(v.X, lo.X, hi.X), math.clamp(v.Y, lo.Y, hi.Y), math.clamp(v.Z, lo.Z, hi.Z))
+end
+
+function Monster._joints(self: Monster)
+	local core: Rig? = nil
+	local best = -1
+	for _, r in self.rig do
+		if r.role == "body" then
+			local s = r.part.Size
+			local v = s.X * s.Y * s.Z
+			if v > best then
+				best = v
+				core = r
+			end
+		end
+	end
+	if core == nil then
+		-- No body piece: the largest piece is the core.
+		for _, r in self.rig do
+			local s = r.part.Size
+			local v = s.X * s.Y * s.Z
+			if v > best then
+				best = v
+				core = r
+			end
+		end
+	end
+	local cb = boxOf(core :: Rig)
+	local coreCenter = (cb.min + cb.max) / 2
+	local legTop = -math.huge
+	for _, r in self.rig do
+		local b = boxOf(r)
+		if r.role == "leg" then
+			legTop = math.max(legTop, b.max.Y)
+		end
+		if r == core then
+			r.pivot = Vector3.new(coreCenter.X, cb.min.Y, coreCenter.Z)
+		elseif r.role ~= "leg" and r.role ~= "base" then
+			local lo = Vector3.new(math.max(b.min.X, cb.min.X), math.max(b.min.Y, cb.min.Y), math.max(b.min.Z, cb.min.Z))
+			local hi = Vector3.new(math.min(b.max.X, cb.max.X), math.min(b.max.Y, cb.max.Y), math.min(b.max.Z, cb.max.Z))
+			if lo.X <= hi.X and lo.Y <= hi.Y and lo.Z <= hi.Z then
+				local mid = (lo + hi) / 2
+				-- Arms hinge near the top of the overlap (the shoulder).
+				if r.role == "armL" or r.role == "armR" then
+					mid = Vector3.new(mid.X, hi.Y - (hi.Y - lo.Y) * 0.25, mid.Z)
+				end
+				r.pivot = mid
+			else
+				r.pivot = clampV(coreCenter, b.min, b.max)
+			end
+		end
+	end
+	-- Held items follow the nearest arm.
+	for i, r in self.rig do
+		if r.role == "held" then
+			local nearest: number? = nil
+			local d = math.huge
+			for j, a in self.rig do
+				if a.role == "armL" or a.role == "armR" then
+					local dist = (a.base.Position - r.base.Position).Magnitude
+					if dist < d then
+						d = dist
+						nearest = j
+					end
+				end
+			end
+			r.holder = nearest
+			local _ = i
+		end
+	end
+	-- Hips: upper body leans about the top of the legs (or the core's base).
+	if legTop > -math.huge then
+		self.hip = Vector3.new(coreCenter.X, legTop, coreCenter.Z)
+	else
+		self.hip = Vector3.new(coreCenter.X, cb.min.Y, coreCenter.Z)
+	end
+end
+
+local function rotAbout(pivot: Vector3, rot: CFrame): CFrame
+	return CFrame.new(pivot) * rot * CFrame.new(-pivot)
 end
 
 function Monster._step(self: Monster, dt: number)
 	self.t += dt
-	local k = self.scale
+	local parts = table.create(#self.rig)
+	local cfs = table.create(#self.rig)
 	if self.dead then
 		self.deathT += dt
-		local parts = table.create(#self.rig)
-		local cfs = table.create(#self.rig)
+		local fade = math.clamp(self.deathT / 1.1, 0, 1)
 		for i, r in self.rig do
 			local v = r.vel :: Vector3
-			r.vel = v + Vector3.new(0, -60 * dt, 0)
+			r.vel = v + Vector3.new(0, -9 * dt, 0)
 			local spin = r.spin :: Vector3
 			parts[i] = r.part
 			cfs[i] = (r.part.CFrame + v * dt) * CFrame.Angles(spin.X * dt, spin.Y * dt, spin.Z * dt)
-			r.part.Transparency = math.max(r.part.Transparency, math.clamp((self.deathT - 0.5) / 0.6, 0, 1))
+			r.part.Transparency = math.max(r.transparency, fade)
 		end
 		workspace:BulkMoveTo(parts, cfs, Enum.BulkMoveMode.FireCFrameChanged)
-		self.highlight.FillTransparency = math.min(1, 0.2 + self.deathT * 2)
-		self.highlight.OutlineTransparency = math.clamp((self.deathT - 0.4) / 0.5, 0, 1)
-		if self.deathT > 1.4 then
-			if self.conn then
-				self.conn:Disconnect()
-				self.conn = nil
-			end
-			self.model:Destroy()
+		self.highlight.FillTransparency = 0.1 + fade * 0.9
+		self.highlight.OutlineTransparency = 0.25 + fade * 0.75
+		if self.deathT > 1.6 then
+			Monster.destroy(self)
 		end
 		return
 	end
-
 	local rm = self.reducedMotion
-	-- Springs: flinch (tilt), stagger (lean back), hurt squash.
-	self.flinchV += (-self.flinch * 140 - self.flinchV * 14) * dt
-	self.flinch += self.flinchV * dt
-	self.stagger = math.max(0, self.stagger - dt * 1.8)
-	self.hurt = math.max(0, self.hurt - dt * 2.5)
-	self.mouthOpen = math.max(if self.telegraph > 0.75 then 0.45 else 0, self.mouthOpen - dt * 2.5)
-
-	local tel = self.telegraph
-	local breathe = math.sin(self.t * 2.2)
-	local bob = if rm then 0 else breathe * 0.12 * k
-	local sy = 1 + breathe * 0.025 - tel * 0.08 - self.hurt * 0.08
-	local sx = 1 - breathe * 0.015 + tel * 0.05 + self.hurt * 0.05
-	local lean = -tel * 0.18 + self.stagger * -0.22
-	local tilt = self.flinch * 0.06 * self.flinchDir
-	local shake = Vector3.zero
-	if not rm then
-		local sh = (if self.urgent then 0.12 else 0) + self.stagger * 0.15
-		if sh > 0 then
-			shake = Vector3.new((math.random() - 0.5) * sh, (math.random() - 0.5) * sh, 0) * k
-		end
-	end
-	-- Lunge toward the cabinet when a threat lands.
-	local lungeZ, lungeX = 0, 0
-	if self.lungeT >= 0 then
-		self.lungeT += dt
-		local u = self.lungeT
-		local a = if u < 0.12 then u / 0.12 else math.max(0, 1 - (u - 0.12) / 0.35)
-		lungeZ = a * 2.6
-		lungeX = -a * 3.2
-		lean += a * 0.35
-		sy -= a * 0.06
-		if u > 0.5 then
-			self.lungeT = -1
-		end
-	end
-	-- Reveal: rise from behind the pedestal with a landing squash.
-	local rise = if self.hidden then -9 * k else 0
-	if self.revealT >= 0 then
+	local t = self.t
+	-- Reveal: rise out of the floor.
+	local rise = 0
+	if self.hidden then
+		rise = -self.height * 1.3
+	elseif self.revealT < self.reveal then
 		self.revealT += dt
-		local u = math.clamp(self.revealT / math.max(0.2, self.reveal), 0, 1)
-		local e = 1 - (1 - u) ^ 3
-		rise = (e - 1) * 9 * k
-		if u >= 1 then
-			self.revealT = -1
-		elseif u > 0.85 then
-			sy -= (1 - u) * 0.6
-			sx += (1 - u) * 0.4
-		end
+		local u = math.clamp(self.revealT / self.reveal, 0, 1)
+		rise = -self.height * 1.3 * (1 - (1 - (1 - u) ^ 3))
 	end
-	-- Blink.
-	self.nextBlink -= dt
-	if self.nextBlink <= 0 then
-		self.blink = 0.14
-		self.nextBlink = 2.5 + math.random() * 3.5
+	-- Threat: lean back and raise arms; slam forward on landing.
+	self.lungeT += dt
+	local lunge = 0
+	if self.lungeT < 0.7 then
+		local u = self.lungeT / 0.7
+		lunge = math.sin(u * math.pi)
 	end
-	self.blink = math.max(0, self.blink - dt)
-	local lidDown = if self.blink > 0 then 1 else (if tel > 0.6 then 0.35 else 0)
-
-	local root = CFrame.new(self.base + Vector3.new(lungeX, bob + rise, lungeZ) + shake) * CFrame.Angles(lean, 0, tilt)
-	local parts = table.create(#self.rig)
-	local cfs = table.create(#self.rig)
+	-- Flinch eases toward the impulse, which then decays: no snapping.
+	self.flinchV = math.max(0, self.flinchV - dt * 2.6)
+	self.flinch += (self.flinchV - self.flinch) * math.min(1, dt * 16)
+	self.stagger = math.max(0, self.stagger - dt * 2)
+	-- Smooth the wind-up; the slam releases it quickly but never snaps.
+	local rate = if self.lungeT < 0.7 then 9 else 3
+	self.teleS += (self.telegraph - self.teleS) * math.min(1, dt * rate)
+	local tele = self.teleS
+	local breathe = if rm then 0 else math.sin(t * 2.2)
+	local hover = if self.float then (if rm then 0 else math.sin(t * 1.3) * 0.35) + self.height * 0.06 else 0
+	local shake = if self.urgent and not rm then (math.random() - 0.5) * 0.12 else 0
+	-- Whole-body pose (model space): flinch leans away from the heroes
+	-- (+Z in model space is behind the monster), lunge leans in.
+	local lean = math.rad(self.flinch * 9 + self.stagger * 8 - lunge * 16 + tele * 6)
+	local bodyPose = CFrame.new(shake, rise + hover + breathe * 0.012 * self.height, self.flinch * 0.35 - lunge * 0.9) * rotAbout(self.hip, CFrame.Angles(lean, 0, 0))
+	local poses: { CFrame } = table.create(#self.rig)
 	for i, r in self.rig do
-		local o = r.offset
-		local p = o.Position
-		local sxx, syy = sx, sy
-		local extra = CFrame.identity
-		if r.group == "foot" then
-			sxx, syy = 1, 1
-		elseif r.group == "armL" or r.group == "armR" or r.group == "handL" or r.group == "handR" then
-			-- Arms rise during the wind-up and slam on the lunge.
-			local raise = tel * 1.6 * k
-			local side = if string.find(r.group, "L") then -1 else 1
-			p += Vector3.new(0, raise, 0)
-			extra = CFrame.Angles(0, 0, side * tel * 0.5)
-		elseif r.group == "lid" then
-			p += Vector3.new(0, -lidDown * r.size.Y * 0.75, 0)
-		elseif r.group == "mouth" or r.group == "tongue" then
-			syy = sy * (1 + self.mouthOpen * 0.9)
+		local pose = CFrame.identity
+		if r.role == "head" then
+			pose = rotAbout(r.pivot, CFrame.Angles(math.rad(breathe * 3 + tele * 10 - lunge * 14 + self.flinch * 8), math.rad(math.sin(t * 0.7) * 6), 0))
+		elseif r.role == "armL" or r.role == "armR" then
+			-- Wind-up raises the arms forward/up; the slam drives them down.
+			local raise = tele * 80 + (if self.urgent then 10 else 0) - lunge * 25
+			local sway = if rm then 0 else math.sin(t * 1.6 + r.side) * 4
+			pose = rotAbout(r.pivot, CFrame.Angles(math.rad(raise + sway - self.flinch * 14), 0, math.rad(-r.side * (tele * 10 + breathe * 1.5))))
+		elseif r.role == "tentacle" then
+			pose = rotAbout(r.pivot, CFrame.Angles(math.rad((if rm then 0 else math.sin(t * 2 + r.side) * 7) + tele * 12 - lunge * 18), 0, math.rad(r.side * (if rm then 0 else math.sin(t * 1.4) * 8))))
+		elseif r.role == "body" then
+			pose = rotAbout(r.pivot, CFrame.Angles(math.rad(breathe * 1.2), 0, 0))
 		end
-		local pos = Vector3.new(p.X * sxx, p.Y * syy, p.Z * sxx)
-		if r.group == "foot" then
-			pos = Vector3.new(p.X, p.Y, p.Z)
-			parts[i] = r.part
-			cfs[i] = CFrame.new(self.base + pos + Vector3.new(lungeX * 0.4, rise, lungeZ * 0.4)) * o.Rotation
-		else
-			parts[i] = r.part
-			cfs[i] = root * CFrame.new(pos) * o.Rotation * extra
+		poses[i] = pose
+	end
+	for i, r in self.rig do
+		local pose = poses[i]
+		if r.role == "held" and r.holder then
+			pose = poses[r.holder :: number]
 		end
-		if r.group == "mouth" or r.group == "tongue" then
-			r.part.Size = Vector3.new(r.size.X * sxx, r.size.Y * (1 + self.mouthOpen * 1.2), r.size.Z)
-		end
+		local whole = if r.role == "leg" or r.role == "base" then CFrame.new(0, rise + (if self.float then hover else 0), 0) else bodyPose
+		parts[i] = r.part
+		cfs[i] = self.origin * whole * pose * r.base
 	end
 	workspace:BulkMoveTo(parts, cfs, Enum.BulkMoveMode.FireCFrameChanged)
-
-	-- Eyes glow red when the threat is imminent; white flash on hits.
-	local glow = if self.urgent then 1 else 0
-	self.eyeGlow += (glow - self.eyeGlow) * math.min(1, dt * 8)
-	for _, r in self.rig do
-		if r.group == "pupil" then
-			r.part.Color = Build.INK:Lerp(Color3.fromRGB(255, 50, 50), self.eyeGlow)
-			r.part.Material = if self.eyeGlow > 0.5 then Enum.Material.Neon else Enum.Material.SmoothPlastic
-		end
-	end
+	self.bubble.CFrame = self.origin * CFrame.new(0, rise + self.height * 0.5, 0)
+	-- Rim and flash.
+	local hl = self.highlight
 	if self.flashT > 0 then
 		self.flashT -= dt
-		self.highlight.FillColor = Color3.new(1, 1, 1)
-		self.highlight.FillTransparency = 0.35
+		hl.FillColor = Color3.new(1, 1, 1)
+		hl.FillTransparency = 0.25
 	else
-		self.highlight.FillTransparency = 1
+		local threatCol = Color3.fromRGB(255, 110, 40)
+		local pulse = 0.5 + 0.5 * math.sin(t * (if self.urgent then 14 else 2))
+		hl.FillColor = self.glow:Lerp(threatCol, tele)
+		hl.FillTransparency = 0.9 - tele * 0.25 * pulse
+		hl.OutlineColor = self.glow:Lerp(threatCol, tele):Lerp(Color3.fromRGB(255, 120, 230), (0.5 + 0.5 * math.sin(t * 0.8)) * 0.4)
+	end
+	if self.light then
+		(self.light :: PointLight).Brightness = 1 + tele * 1.5
+	end
+	if self.aura then
+		(self.aura :: ParticleEmitter).Rate = if self.hidden then 0 else 8 + tele * 30
 	end
 end
 
 function Monster.headPosition(self: Monster): Vector3
-	return self.base + Vector3.new(0, 9.5 * self.scale, 0)
+	return self.base + Vector3.new(0, self.height * 0.95, 0)
 end
 
 function Monster.centerPosition(self: Monster): Vector3
-	return self.base + Vector3.new(0, 4.4 * self.scale, 2)
+	return self.base + Vector3.new(0, self.height * 0.55, 1)
 end
 
 function Monster.destroy(self: Monster)
 	if self.conn then
 		self.conn:Disconnect()
+		self.conn = nil
 	end
 	self.model:Destroy()
 end

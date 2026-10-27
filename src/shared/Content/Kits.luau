@@ -16,9 +16,9 @@ export type KitDef = {
 local LIST: { KitDef } = {
 	{
 		id = "ricochet",
-		name = "Ricochet Kit",
+		name = "Duelist",
 		tag = "ricochet",
-		description = "Wall bounces and long combos.",
+		description = "Ricochets and long combos. Twin daggers strike hard.",
 		rack = { "basic", "rebound", "zip" },
 		starter = "wall_studs",
 		color = Color3.fromRGB(255, 196, 46),
@@ -26,9 +26,9 @@ local LIST: { KitDef } = {
 	},
 	{
 		id = "relay",
-		name = "Relay Kit",
+		name = "Mystic",
 		tag = "relay",
-		description = "Power up a friend's next shot.",
+		description = "Support caster: Relay pegs empower an ally's next strike.",
 		rack = { "basic", "signal", "beacon" },
 		starter = "return_coil",
 		color = Color3.fromRGB(190, 92, 255),
@@ -36,9 +36,9 @@ local LIST: { KitDef } = {
 	},
 	{
 		id = "guard",
-		name = "Guard Kit",
+		name = "Warden",
 		tag = "guard",
-		description = "Shields, repairs, and steady damage.",
+		description = "Shield and blade: guards the party and mends wounds.",
 		rack = { "basic", "bulwark", "anchor" },
 		starter = "plating",
 		color = Color3.fromRGB(64, 150, 255),

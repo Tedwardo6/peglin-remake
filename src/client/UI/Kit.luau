@@ -9,6 +9,7 @@
 
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
 
 local Theme = require(script.Parent.Theme)
 local Audio = require(script.Parent.Parent.Juice.Audio)
@@ -18,6 +19,33 @@ local C = Theme.Color
 local Kit = {}
 
 Kit.Settings = { reducedMotion = false }
+
+-- Iridescent rims: every registered gradient drifts together from one
+-- per-frame update (cheap; stops when its owner is destroyed).
+local shimmering: { [UIGradient]: number } = {}
+local shimmerT = 0
+RunService.RenderStepped:Connect(function(dt)
+	if Kit.Settings.reducedMotion then
+		return
+	end
+	shimmerT += dt
+	for g, speed in shimmering do
+		if g.Parent == nil then
+			shimmering[g] = nil
+		else
+			g.Rotation = (shimmerT * speed) % 360
+		end
+	end
+end)
+
+function Kit.shimmer(parent: Instance, speed: number?, colors: ColorSequence?): UIGradient
+	local g = Instance.new("UIGradient")
+	g.Color = colors or Theme.Iridescent
+	g.Rotation = 0
+	g.Parent = parent
+	shimmering[g] = speed or 40
+	return g
+end
 
 export type Props = { [string]: any }
 
@@ -75,7 +103,7 @@ function Kit.label(props: Props): TextLabel
 	local size = props.TextSize or 22
 	local label = Kit.new("TextLabel", {
 		BackgroundTransparency = 1,
-		FontFace = props.Bold and Theme.FontBold or Theme.Font,
+		FontFace = if props.Title then (if props.Bold then Theme.FontTitleBold else Theme.FontTitle) elseif props.Bold then Theme.FontBold else Theme.Font,
 		TextColor3 = props.TextColor3 or C.text,
 		TextSize = size,
 		TextScaled = props.TextScaled or false,
@@ -114,12 +142,17 @@ function Kit.panel(props: Props): Frame
 		Visible = if props.Visible == nil then true else props.Visible,
 		Parent = props.Parent,
 	})
-	Kit.corner(props.Radius or 14).Parent = f
-	Kit.stroke(props.StrokeThickness or Theme.Stroke.ui, props.StrokeColor or C.ink).Parent = f
+	Kit.corner(props.Radius or 8).Parent = f
+	local rim = Kit.stroke(props.StrokeThickness or Theme.Stroke.ui, if props.StrokeColor then props.StrokeColor else Color3.new(1, 1, 1))
+	rim.Parent = f
+	if props.StrokeColor == nil then
+		-- Iridescent rune rim.
+		Kit.shimmer(rim, props.ShimmerSpeed or 30)
+	end
 	if props.Gradient ~= false then
 		Kit.new("UIGradient", {
 			Rotation = 90,
-			Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(205, 210, 235)),
+			Color = ColorSequence.new(Color3.fromRGB(235, 235, 255), Color3.fromRGB(120, 120, 170)),
 			Parent = f,
 		})
 	end
@@ -158,8 +191,8 @@ export type ButtonProps = {
 }
 
 function Kit.button(props: ButtonProps): Button
-	local faceColor = props.Face or C.gold
-	local depth = props.Depth or 8
+	local faceColor = props.Face or C.ember
+	local depth = props.Depth or 6
 	local travel = math.floor(depth * 0.6 + 0.5)
 	local enabled = true
 	local hovering = false
@@ -188,8 +221,8 @@ function Kit.button(props: ButtonProps): Button
 		Position = UDim2.fromOffset(0, 0),
 		Parent = content,
 	})
-	Kit.corner(14).Parent = body
-	local bodyStroke = Kit.stroke(Theme.Stroke.ui + 0.5)
+	Kit.corner(7).Parent = body
+	local bodyStroke = Kit.stroke(Theme.Stroke.ui, C.ink)
 	bodyStroke.Parent = body
 	local face: Frame = Kit.new("Frame", {
 		Name = "Face",
@@ -198,20 +231,33 @@ function Kit.button(props: ButtonProps): Button
 		Position = UDim2.fromOffset(0, 0),
 		Parent = body,
 	})
-	Kit.corner(13).Parent = face
+	Kit.corner(6).Parent = face
+	-- Engraved rim: a thin bright line inside the face edge.
+	local rim = Kit.new("UIStroke", {
+		Thickness = 1.5,
+		Color = Color3.new(1, 1, 1),
+		Transparency = 0.55,
+		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+		Parent = face,
+	})
 	-- Inset shine along the top of the face.
 	local shine: Frame = Kit.new("Frame", {
 		Name = "Shine",
 		BackgroundColor3 = Color3.new(1, 1, 1),
-		BackgroundTransparency = 0.55,
-		Size = UDim2.new(1, -14, 0, 5),
-		Position = UDim2.fromOffset(7, 4),
+		BackgroundTransparency = 0.78,
+		Size = UDim2.new(1, -10, 0.42, 0),
+		Position = UDim2.fromOffset(5, 3),
 		Parent = face,
 	})
-	Kit.corner(3).Parent = shine
+	Kit.corner(4).Parent = shine
 	Kit.new("UIGradient", {
 		Rotation = 90,
-		Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(225, 225, 235)),
+		Transparency = NumberSequence.new(0, 1),
+		Parent = shine,
+	})
+	Kit.new("UIGradient", {
+		Rotation = 90,
+		Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(150, 140, 190)),
 		Parent = face,
 	})
 	local text = props.Text or ""
@@ -242,6 +288,7 @@ function Kit.button(props: ButtonProps): Button
 			targetScale = 1
 		end
 		Kit.tween(scale, t, { Scale = targetScale })
+		Kit.tween(rim, t, { Transparency = if hovering and enabled then 0.1 else 0.55 })
 		-- Face moves down; the silhouette top follows; the bottom edge stays put.
 		local off = if pressed then travel else 0
 		Kit.tween(body, t, { Position = UDim2.fromOffset(0, off), Size = UDim2.new(1, 0, 1, -off) })
@@ -364,7 +411,7 @@ export type Bar = {
 function Kit.bar(props: Props): Bar
 	local root: Frame = Kit.new("Frame", {
 		Name = props.Name or "Bar",
-		BackgroundColor3 = C.ink,
+		BackgroundColor3 = Color3.fromRGB(6, 6, 18),
 		Size = props.Size or UDim2.fromOffset(220, 26),
 		Position = props.Position or UDim2.new(),
 		AnchorPoint = props.AnchorPoint or Vector2.zero,
@@ -372,34 +419,34 @@ function Kit.bar(props: Props): Bar
 		ZIndex = props.ZIndex or 1,
 		Parent = props.Parent,
 	})
-	Kit.corner(props.Radius or 10).Parent = root
-	Kit.stroke(Theme.Stroke.ui).Parent = root
+	Kit.corner(props.Radius or 5).Parent = root
+	Kit.stroke(1.5, props.RimColor or C.goldDeep).Parent = root
 	local inner: Frame = Kit.new("Frame", {
 		Name = "Inner",
 		BackgroundTransparency = 1,
-		Size = UDim2.new(1, -6, 1, -6),
-		Position = UDim2.fromOffset(3, 3),
+		Size = UDim2.new(1, -4, 1, -4),
+		Position = UDim2.fromOffset(2, 2),
 		ClipsDescendants = true,
 		Parent = root,
 	})
-	Kit.corner((props.Radius or 10) - 3).Parent = inner
+	Kit.corner(math.max(2, (props.Radius or 5) - 2)).Parent = inner
 	local ghost: Frame = Kit.new("Frame", {
 		Name = "Ghost",
-		BackgroundColor3 = Color3.new(1, 1, 1),
+		BackgroundColor3 = Color3.fromRGB(255, 230, 200),
 		Size = UDim2.fromScale(1, 1),
 		Parent = inner,
 	})
-	Kit.corner((props.Radius or 10) - 3).Parent = ghost
+	Kit.corner(math.max(2, (props.Radius or 5) - 2)).Parent = ghost
 	local fill: Frame = Kit.new("Frame", {
 		Name = "Fill",
 		BackgroundColor3 = props.Color or C.hull,
 		Size = UDim2.fromScale(1, 1),
 		Parent = inner,
 	})
-	Kit.corner((props.Radius or 10) - 3).Parent = fill
+	Kit.corner(math.max(2, (props.Radius or 5) - 2)).Parent = fill
 	Kit.new("UIGradient", {
 		Rotation = 90,
-		Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(200, 200, 210)),
+		Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(150, 140, 180)),
 		Parent = fill,
 	})
 	local overlay: Frame = Kit.new("Frame", {
@@ -409,7 +456,7 @@ function Kit.bar(props: Props): Bar
 		Size = UDim2.fromScale(0, 1),
 		Parent = inner,
 	})
-	Kit.corner((props.Radius or 10) - 3).Parent = overlay
+	Kit.corner(math.max(2, (props.Radius or 5) - 2)).Parent = overlay
 	local text = Kit.label({
 		Text = "",
 		TextSize = props.TextSize or 18,

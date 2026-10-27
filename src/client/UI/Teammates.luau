@@ -64,11 +64,12 @@ function Teammates.new(parent: Instance, onPick: (number) -> ()): Teammates
 	self.root = Kit.new("Frame", {
 		Name = "Teammates",
 		BackgroundTransparency = 1,
-		Size = UDim2.fromOffset(200, 520),
-		Position = UDim2.fromOffset(16, 84),
+		Size = UDim2.fromOffset(620, 150),
+		Position = UDim2.new(0.5, 30, 0, 12),
+		AnchorPoint = Vector2.new(0.5, 0),
 		Parent = parent,
 	})
-	Kit.new("UIListLayout", { Padding = UDim.new(0, 10), SortOrder = Enum.SortOrder.LayoutOrder, Parent = self.root })
+	Kit.new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 10), SortOrder = Enum.SortOrder.LayoutOrder, Parent = self.root })
 	self.cards = {}
 	self.order = {}
 	self.onPick = onPick

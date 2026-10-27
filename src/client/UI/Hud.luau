@@ -1,8 +1,8 @@
 --!strict
 -- In-fight HUD. Corners hold stable controls in thumb reach on phones:
---   top-left: run progress   · top-right: settings / peg key
---   right: monster HP, armor, threat countdown card
---   bottom-left: your hull + shield, held Relay Charge
+--   top-left: act and path progress   · top-right: settings / peg key
+--   right: monster HP (lost HP split by who dealt it), armor, intent card
+--   bottom-left: your HP + shield, held Empower charge
 --   bottom-right: ball rack + LAUNCH (separate from aiming)
 -- Everything is built once and updated in place; nothing pops in or out
 -- without a transition.
@@ -37,6 +37,10 @@ export type Hud = typeof(setmetatable(
 		scale: UIScale,
 		pips: { Frame },
 		pipHolder: Frame,
+		actLabel: TextLabel,
+		contribHolder: Frame,
+		contribSegs: { Frame },
+		legend: Frame,
 		enemyName: TextLabel,
 		enemyBar: Kit.Bar,
 		armorLabel: TextLabel,
@@ -96,27 +100,25 @@ function Hud.new(gui: Instance, onSelectSlot: (number) -> (), onLaunch: () -> ()
 	local root = Kit.new("Frame", { Name = "Hud", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Parent = gui })
 	self.root = root
 
-	-- Progress pips (top-left).
-	local pipHolder = Kit.panel({ Name = "Progress", Size = UDim2.fromOffset(318, 54), Position = UDim2.fromOffset(16, 14), Color = C.panel, Parent = root })
+	-- Act and path progress (top-left).
+	local pipHolder = Kit.panel({ Name = "Progress", Size = UDim2.fromOffset(330, 58), Position = UDim2.fromOffset(16, 12), Color = C.panel, Transparency = 0.1, Parent = root })
 	self.pipHolder = pipHolder
 	Kit.new("UIScale", { Parent = pipHolder })
+	self.actLabel = Kit.label({ Text = "", Title = true, TextSize = 22, TextColor3 = C.gold, Size = UDim2.new(1, -16, 0, 24), Position = UDim2.fromOffset(10, 3), TextXAlignment = Enum.TextXAlignment.Left, Parent = pipHolder })
 	self.pips = {}
-	for i = 1, 9 do
-		local boss = i % 3 == 0
-		local d = if boss then 32 else 22
+	for i = 1, 4 do
+		local boss = i == 4
+		local d = if boss then 22 else 16
 		local pip = Kit.new("Frame", {
 			Name = "Pip" .. i,
 			Size = UDim2.fromOffset(d, d),
 			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromOffset(22 + (i - 1) * 34 + math.floor((i - 1) / 3) * 4, 27),
+			Position = UDim2.fromOffset(20 + (i - 1) * 30, 42),
 			BackgroundColor3 = C.panelLight,
+			Rotation = 45,
 			Parent = pipHolder,
 		})
-		Kit.corner(d // 2).Parent = pip
-		Kit.stroke(2.5).Parent = pip
-		if boss then
-			Kit.label({ Text = "♛", TextSize = 18, Size = UDim2.fromScale(1, 1), Parent = pip })
-		end
+		Kit.stroke(1.5, C.goldDeep).Parent = pip
 		Kit.new("UIScale", { Parent = pip })
 		self.pips[i] = pip
 	end
@@ -128,16 +130,28 @@ function Hud.new(gui: Instance, onSelectSlot: (number) -> (), onLaunch: () -> ()
 	-- Monster panel (top-right, above the monster).
 	local enemyPanel = Kit.panel({ Name = "Enemy", Size = UDim2.fromOffset(360, 92), Position = UDim2.new(1, -16, 0, 80), AnchorPoint = Vector2.new(1, 0), Color = C.panel, Parent = root })
 	self.enemyPanel = enemyPanel
-	self.enemyName = Kit.label({ Text = "Monster", TextSize = 24, Size = UDim2.new(1, -20, 0, 30), Position = UDim2.fromOffset(10, 4), TextXAlignment = Enum.TextXAlignment.Left, Parent = enemyPanel })
+	self.enemyName = Kit.label({ Text = "Monster", Title = true, Bold = true, TextSize = 28, Size = UDim2.new(1, -20, 0, 30), Position = UDim2.fromOffset(10, 4), TextXAlignment = Enum.TextXAlignment.Left, Parent = enemyPanel })
 	self.phaseLabel = Kit.label({ Text = "", TextSize = 16, TextColor3 = C.gold, Size = UDim2.new(1, -20, 0, 20), Position = UDim2.fromOffset(10, 6), TextXAlignment = Enum.TextXAlignment.Right, Parent = enemyPanel })
 	self.enemyBar = Kit.bar({ Size = UDim2.new(1, -20, 0, 34), Position = UDim2.fromOffset(10, 40), Color = C.enemyHp, OverlayColor = C.armor, TextSize = 20, Parent = enemyPanel })
-	self.armorLabel = Kit.label({ Text = "", TextSize = 16, TextColor3 = C.armor, Size = UDim2.new(1, -20, 0, 18), Position = UDim2.new(0, 10, 1, 2), TextXAlignment = Enum.TextXAlignment.Right, Parent = enemyPanel })
+	self.armorLabel = Kit.label({ Text = "", TextSize = 15, TextColor3 = C.armor, Size = UDim2.new(1, -20, 0, 18), Position = UDim2.new(0, 10, 1, 2), TextXAlignment = Enum.TextXAlignment.Right, Parent = enemyPanel })
+	-- Lost HP split by who dealt it: one segment per hero, in seat colours,
+	-- drawn inside the empty right-hand part of the bar.
+	local contrib = Kit.new("Frame", { Name = "Contribution", BackgroundTransparency = 1, Size = UDim2.new(1, -24, 0, 30), Position = UDim2.fromOffset(12, 42), ClipsDescendants = true, ZIndex = 2, Parent = enemyPanel })
+	self.contribHolder = contrib
+	self.contribSegs = {}
+	for i = 1, 4 do
+		local seg = Kit.new("Frame", { BackgroundColor3 = Theme.slot(i), BackgroundTransparency = 0.35, BorderSizePixel = 0, Size = UDim2.fromScale(0, 1), Visible = false, ZIndex = 2, Parent = contrib })
+		self.contribSegs[i] = seg
+	end
+	local legend = Kit.new("Frame", { Name = "Legend", BackgroundTransparency = 1, Size = UDim2.new(1, -20, 0, 18), Position = UDim2.new(0, 10, 1, 2), Parent = enemyPanel })
+	Kit.new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 10), Parent = legend })
+	self.legend = legend
 
 	-- Threat card (right, mid-height near the monster's head).
-	local card = Kit.panel({ Name = "Threat", Size = UDim2.fromOffset(250, 104), Position = UDim2.new(1, -16, 0, 200), AnchorPoint = Vector2.new(1, 0), Color = Color3.fromRGB(80, 26, 40), Parent = root })
+	local card = Kit.panel({ Name = "Threat", Size = UDim2.fromOffset(250, 96), Position = UDim2.new(1, -16, 0, 206), AnchorPoint = Vector2.new(1, 0), Color = Color3.fromRGB(70, 20, 34), StrokeColor = C.threat, Parent = root })
 	self.threatCard = card
 	self.threatScale = Kit.new("UIScale", { Parent = card })
-	self.threatTitle = Kit.label({ Text = "Slam", TextSize = 24, TextColor3 = C.threat, Size = UDim2.new(1, -86, 0, 30), Position = UDim2.fromOffset(12, 8), TextXAlignment = Enum.TextXAlignment.Left, Parent = card })
+	self.threatTitle = Kit.label({ Text = "Slam", Title = true, Bold = true, TextSize = 26, TextColor3 = C.threat, Size = UDim2.new(1, -86, 0, 30), Position = UDim2.fromOffset(12, 8), TextXAlignment = Enum.TextXAlignment.Left, Parent = card })
 	self.threatDetail = Kit.label({ Text = "8 damage to each player", TextSize = 16, Size = UDim2.new(1, -86, 0, 56), Position = UDim2.fromOffset(12, 38), TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, TextWrapped = true, Parent = card })
 	local timeBox = Kit.panel({ Size = UDim2.fromOffset(66, 66), Position = UDim2.new(1, -12, 0.5, 0), AnchorPoint = Vector2.new(1, 0.5), Color = C.ink, Radius = 33, Gradient = false, Parent = card })
 	self.threatTime = Kit.label({ Text = "12", TextSize = 34, Bold = true, Size = UDim2.fromScale(1, 1), Parent = timeBox })
@@ -145,12 +159,12 @@ function Hud.new(gui: Instance, onSelectSlot: (number) -> (), onLaunch: () -> ()
 	-- Player panel (bottom-left): hull, shield, held charge.
 	local playerPanel = Kit.panel({ Name = "Player", Size = UDim2.fromOffset(330, 112), Position = UDim2.new(0, 16, 1, -16), AnchorPoint = Vector2.new(0, 1), Color = C.panel, Parent = root })
 	self.playerPanel = playerPanel
-	self.hullLabel = Kit.label({ Text = "HULL", TextSize = 18, Size = UDim2.fromOffset(120, 22), Position = UDim2.fromOffset(12, 6), TextXAlignment = Enum.TextXAlignment.Left, Parent = playerPanel })
+	self.hullLabel = Kit.label({ Text = "HEALTH", Title = true, TextSize = 20, Size = UDim2.fromOffset(120, 22), Position = UDim2.fromOffset(12, 6), TextXAlignment = Enum.TextXAlignment.Left, Parent = playerPanel })
 	self.shieldLabel = Kit.label({ Text = "", TextSize = 18, TextColor3 = C.shield, Size = UDim2.fromOffset(110, 22), Position = UDim2.fromOffset(110, 6), TextXAlignment = Enum.TextXAlignment.Right, Parent = playerPanel })
 	self.hullBar = Kit.bar({ Size = UDim2.fromOffset(210, 30), Position = UDim2.fromOffset(12, 32), Color = C.hull, OverlayColor = C.shield, TextSize = 18, Parent = playerPanel })
 	self.statusLabel = Kit.label({ Text = "", TextSize = 16, TextColor3 = C.textDim, Size = UDim2.fromOffset(210, 36), Position = UDim2.fromOffset(12, 68), TextXAlignment = Enum.TextXAlignment.Left, TextWrapped = true, Parent = playerPanel })
 	-- Charge slot: shows who sent it before you aim.
-	local slot = Kit.panel({ Name = "Charge", Size = UDim2.fromOffset(86, 92), Position = UDim2.new(1, -10, 0.5, 0), AnchorPoint = Vector2.new(1, 0.5), Color = C.purpleDeep, Parent = playerPanel })
+	local slot = Kit.panel({ Name = "Charge", Size = UDim2.fromOffset(86, 92), Position = UDim2.new(1, -10, 0.5, 0), AnchorPoint = Vector2.new(1, 0.5), Color = C.purpleDeep, StrokeColor = C.purple, Parent = playerPanel })
 	self.chargeSlot = slot
 	Kit.new("UIScale", { Parent = slot })
 	self.chargePortrait = Kit.new("ImageLabel", {
@@ -165,7 +179,7 @@ function Hud.new(gui: Instance, onSelectSlot: (number) -> (), onLaunch: () -> ()
 	Kit.corner(24).Parent = self.chargePortrait
 	Kit.stroke(2.5).Parent = self.chargePortrait
 	self.chargeText = Kit.label({ Text = "", TextSize = 15, Size = UDim2.new(1, -6, 0, 30), Position = UDim2.new(0, 3, 1, -34), TextWrapped = true, Parent = slot })
-	self.chargeEmpty = Kit.label({ Text = "RELAY\nempty", TextSize = 14, TextColor3 = C.textDim, Size = UDim2.fromScale(1, 1), TextWrapped = true, Parent = slot })
+	self.chargeEmpty = Kit.label({ Text = "EMPOWER\nempty", TextSize = 13, TextColor3 = C.textDim, Size = UDim2.fromScale(1, 1), TextWrapped = true, Parent = slot })
 
 	-- Rack + LAUNCH (bottom-right).
 	local rackPanel = Kit.new("Frame", { Name = "Rack", BackgroundTransparency = 1, Size = UDim2.fromOffset(460, 150), Position = UDim2.new(1, -16, 1, -16), AnchorPoint = Vector2.new(1, 1), Parent = root })
@@ -176,8 +190,8 @@ function Hud.new(gui: Instance, onSelectSlot: (number) -> (), onLaunch: () -> ()
 			Text = "",
 			Size = UDim2.fromOffset(92, 104),
 			Position = UDim2.fromOffset((i - 1) * 100, 46),
-			Face = C.panelLight,
-			Depth = 7,
+			Face = Color3.fromRGB(34, 30, 80),
+			Depth = 6,
 			OnActivated = function()
 				self.onSelectSlot(i)
 			end,
@@ -199,9 +213,9 @@ function Hud.new(gui: Instance, onSelectSlot: (number) -> (), onLaunch: () -> ()
 		Size = UDim2.fromOffset(150, 132),
 		Position = UDim2.new(1, 0, 1, 0),
 		AnchorPoint = Vector2.new(1, 1),
-		Face = C.green,
+		Face = C.ember,
 		TextSize = 30,
-		Depth = 10,
+		Depth = 8,
 		Sound = "launch",
 		OnActivated = function()
 			self.onLaunch()
@@ -210,7 +224,7 @@ function Hud.new(gui: Instance, onSelectSlot: (number) -> (), onLaunch: () -> ()
 	})
 
 	-- Centre banner for moments.
-	self.banner = Kit.label({ Name = "Banner", Text = "", TextSize = 64, Bold = true, Size = UDim2.fromOffset(800, 80), Position = UDim2.fromScale(0.42, 0.42), AnchorPoint = Vector2.new(0.5, 0.5), ZIndex = 30, Parent = root })
+	self.banner = Kit.label({ Name = "Banner", Text = "", TextSize = 72, Title = true, Bold = true, Size = UDim2.fromOffset(800, 80), Position = UDim2.fromScale(0.42, 0.42), AnchorPoint = Vector2.new(0.5, 0.5), ZIndex = 30, Parent = root })
 	self.banner.TextTransparency = 1
 	self.bannerScale = Kit.new("UIScale", { Parent = self.banner })
 	self.bannerSub = Kit.label({ Name = "BannerSub", Text = "", TextSize = 26, Size = UDim2.fromOffset(800, 34), Position = UDim2.fromScale(0.42, 0.42 + 0.085), AnchorPoint = Vector2.new(0.5, 0.5), ZIndex = 30, Parent = root })
@@ -254,19 +268,58 @@ function Hud.showBanner(self: Hud, text: string, sub: string?, color: Color3?, h
 	end)
 end
 
-function Hud.setProgress(self: Hud, index: number, total: number)
-	self.pipHolder.Visible = total > 1
+-- `step` is the node within the act (1..steps, the last is the boss).
+function Hud.setProgress(self: Hud, step: number, steps: number, actText: string?)
+	self.pipHolder.Visible = steps > 1
+	self.actLabel.Text = actText or ""
 	for i, pip in self.pips do
-		local done = i < index
-		local current = i == index
-		pip.BackgroundColor3 = if done then C.green elseif current then C.gold else C.panelLight
+		pip.Visible = i <= steps
+		local done = i < step
+		local current = i == step
+		pip.BackgroundColor3 = if done then C.goldDeep elseif current then C.gold else C.panelLight
 		local stroke = pip:FindFirstChildOfClass("UIStroke")
 		if stroke then
-			stroke.Color = if current then Color3.new(1, 1, 1) else C.ink
+			stroke.Color = if current then Color3.new(1, 1, 1) else C.goldDeep
 		end
-		if current then
-			Kit.bounce(pip, 0.3)
+	end
+end
+
+export type Contribution = { uid: number, name: string, seat: number, damage: number }
+
+-- Splits the monster's lost HP between heroes and labels each share.
+function Hud.setContribution(self: Hud, list: { Contribution }, hp: number, maxHp: number)
+	local lost = math.max(0, maxHp - hp)
+	local total = 0
+	for _, c in list do
+		total += c.damage
+	end
+	local x = math.clamp(hp / math.max(1, maxHp), 0, 1)
+	for i, seg in self.contribSegs do
+		local c = list[i]
+		if c and total > 0 and lost > 0 and #list > 1 then
+			local w = (lost / maxHp) * (c.damage / total)
+			seg.Visible = true
+			seg.BackgroundColor3 = Theme.slot(c.seat)
+			seg.Position = UDim2.fromScale(x, 0)
+			seg.Size = UDim2.fromScale(w, 1)
+			x += w
+		else
+			seg.Visible = false
 		end
+	end
+	for _, ch in self.legend:GetChildren() do
+		if ch:IsA("GuiObject") then
+			ch:Destroy()
+		end
+	end
+	if #list > 1 then
+		for _, c in list do
+			local pct = if total > 0 then math.floor(c.damage / total * 100 + 0.5) else 0
+			Kit.label({ Text = `● {c.name} {pct}%`, TextSize = 13, Bold = true, TextColor3 = Theme.slot(c.seat), Size = UDim2.fromOffset(100, 18), AutomaticSize = nil, TextXAlignment = Enum.TextXAlignment.Left, Parent = self.legend })
+		end
+		self.armorLabel.Position = UDim2.new(0, 10, 1, 20)
+	else
+		self.armorLabel.Position = UDim2.new(0, 10, 1, 2)
 	end
 end
 
