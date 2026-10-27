@@ -215,7 +215,8 @@ local function plate(self: Hero, adornee: Instance)
 	bb.Name = "HeroPlate"
 	bb.Size = UDim2.fromOffset(150, 74)
 	bb.StudsOffsetWorldSpace = Vector3.new(0, 4.4, 0)
-	bb.AlwaysOnTop = true
+	-- Not AlwaysOnTop: those billboards failed to render in Studio play tests.
+	bb.AlwaysOnTop = false
 	bb.LightInfluence = 0
 	bb.MaxDistance = 400
 	bb.Adornee = adornee

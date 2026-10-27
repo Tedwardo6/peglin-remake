@@ -60,7 +60,7 @@ function Fx.init(parentWorld: Instance, gui: ScreenGui)
 	for i = 1, NUMBER_COUNT do
 		local bb = Instance.new("BillboardGui")
 		bb.Size = UDim2.fromOffset(160, 70)
-		bb.AlwaysOnTop = true
+		bb.AlwaysOnTop = false -- AlwaysOnTop billboards failed to render in Studio play tests
 		bb.LightInfluence = 0
 		bb.Enabled = false
 		bb.Name = "DamageNumber"
@@ -111,7 +111,8 @@ function Fx.number(pos: Vector3, text: string, color: Color3, magnitude: number)
 	local label = bb:FindFirstChild("Text") :: TextLabel
 	local scale = label:FindFirstChildOfClass("UIScale") :: UIScale
 	bb.Adornee = sparkHost
-	bb.StudsOffsetWorldSpace = pos - sparkHost.Position
+	-- Nudged toward the camera so pegs and the board never hide the number.
+	bb.StudsOffsetWorldSpace = pos - sparkHost.Position + Vector3.new(0, 0, 1.5)
 	bb.Enabled = true
 	label.Text = text
 	label.TextColor3 = color
