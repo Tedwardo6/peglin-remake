@@ -62,7 +62,7 @@ local function ring(parent: Instance, inset: number, thickness: number, color: C
 		Thickness = thickness,
 		Color = if gradient then Color3.new(1, 1, 1) else color,
 		Transparency = transparency or 0,
-		LineJoinMode = Enum.LineJoinMode.Miter,
+		LineJoinMode = if round then Enum.LineJoinMode.Round else Enum.LineJoinMode.Miter,
 		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
 		Parent = f,
 	})
