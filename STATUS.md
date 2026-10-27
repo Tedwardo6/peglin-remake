@@ -11,7 +11,7 @@
 
 | Place | Purpose | Roblox place ID | Owner (writer) |
 |---|---|---|---|
-| Baseplate prototype (name unconfirmed) | Prototype | _ID not yet recorded_ | Theodore |
+| Baseplate prototype (name unconfirmed) | Prototype | `123038652032080` (place ID reported by Theodore from Studio, Oct 27, 2026; universe ID not yet recorded) | Theodore |
 
 Record real IDs only after verifying them in Studio or Creator Hub.
 
@@ -28,5 +28,5 @@ Record real IDs only after verifying them in Studio or Creator Hub.
 - **Changes:** Rojo project (three synced code folders), starter scripts, README, AGENTS.md agent guide, STATUS.md.
 - **Tests and visual evidence:** `rojo build` succeeded in a cloud workspace with Rojo 7.7.1. No in-Studio evidence recorded yet.
 - **Saved / tested / approved / published:** Saved to GitHub. Not tested in Studio. Not published.
-- **Open issues and decisions:** Confirm sync (Play shows both "Rojo sync OK" lines). Record the place ID. Register the game in the studio index. Design plan pending.
+- **Open issues and decisions:** Confirm sync (Play shows both "Rojo sync OK" lines). Record the universe ID. Register the game in the studio index. Design plan pending.
 - **Next objective and owner:** Theodore confirms sync; then Prototype 1 after the design plan is approved.
