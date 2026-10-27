@@ -54,7 +54,7 @@ local function rgb(r: number, g: number, b: number): Color3
 end
 
 local function pulseOn(part: BasePart, base: number, speed: number)
-	pulseOn(part, base, speed)
+	table.insert(glowPulse, { part = part, base = base, speed = speed })
 end
 
 -- Lighting ------------------------------------------------------------------
