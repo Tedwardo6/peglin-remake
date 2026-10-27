@@ -73,8 +73,8 @@ end
 function Scenery.applyLighting(p: ActPalette, mood: "fight" | "lobby")
 	Lighting.ClockTime = 0.2
 	Lighting.Brightness = if mood == "lobby" then 1.6 else 1.4
-	Lighting.Ambient = p.deep:Lerp(rgb(70, 64, 140), 0.55)
-	Lighting.OutdoorAmbient = p.deep:Lerp(rgb(110, 100, 200), 0.6)
+	Lighting.Ambient = p.deep:Lerp(rgb(90, 80, 160), if mood == "lobby" then 0.8 else 0.6)
+	Lighting.OutdoorAmbient = p.deep:Lerp(rgb(130, 120, 220), if mood == "lobby" then 0.8 else 0.65)
 	Lighting.EnvironmentDiffuseScale = 0.35
 	Lighting.EnvironmentSpecularScale = 0.7
 	Lighting.GlobalShadows = true

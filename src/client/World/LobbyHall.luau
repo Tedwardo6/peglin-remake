@@ -145,6 +145,21 @@ function LobbyHall.build(parent: Instance): Handles
 	end
 	local dais = Build.cylinder(model, 0.6, 11, CFrame.new(o + Vector3.new(0, 0.3, -1)) * CFrame.Angles(0, 0, math.rad(90)), STONE, { material = Enum.Material.Slate })
 	local _ = dais
+	-- Key light over the dais so the party reads clearly against the hall.
+	local keyHost = Build.block(model, Vector3.new(0.5, 0.5, 0.5), CFrame.lookAt(o + Vector3.new(3, 11, 7), o + Vector3.new(0, 2, -1)), Color3.new(1, 1, 1), { transparency = 1 })
+	local key = Instance.new("SpotLight")
+	key.Face = Enum.NormalId.Front
+	key.Angle = 70
+	key.Range = 24
+	key.Brightness = 2.4
+	key.Color = rgb(225, 215, 255)
+	key.Shadows = true
+	key.Parent = keyHost
+	local rim = Instance.new("PointLight")
+	rim.Color = rgb(120, 140, 255)
+	rim.Brightness = 1.4
+	rim.Range = 12
+	rim.Parent = Build.block(model, Vector3.new(0.5, 0.5, 0.5), CFrame.new(o + Vector3.new(0, 5, -6)), Color3.new(1, 1, 1), { transparency = 1 })
 	for k = 0, 23 do
 		local a = k / 24 * math.pi * 2
 		local p = Build.block(model, Vector3.new(0.5, 0.08, 0.5), CFrame.new(o + Vector3.new(math.cos(a) * 5, 0.64, -1 + math.sin(a) * 5)) * CFrame.Angles(0, -a, 0), rgb(110, 150, 255), { material = Enum.Material.Neon })

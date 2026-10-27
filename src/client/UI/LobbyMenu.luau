@@ -62,7 +62,7 @@ export type Menu = {
 
 local FAMILY_NAMES = { ricochet = "Ricochet", relay = "Relay", guard = "Guard", wild = "Wild" }
 local FAMILY_ORDER = { "ricochet", "relay", "guard", "wild" }
-local CLASS_GLYPH = { ricochet = "⚔", relay = "✦", guard = "⛨" }
+local CLASS_GLYPH = { ricochet = "⚔️", relay = "🔮", guard = "🛡️" }
 
 local function heading(parent: Instance, text: string, y: number, z: number): TextLabel
 	return Kit.label({ Text = text, Title = true, Bold = true, TextSize = 26, TextColor3 = C.gold, Size = UDim2.new(1, -24, 0, 30), Position = UDim2.fromOffset(12, y), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = z, Parent = parent })
@@ -192,7 +192,7 @@ function LobbyMenu.new(parent: Instance, cb: Callbacks): Menu
 	Kit.new("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder, Parent = partyBody })
 
 	-- Primary actions (bottom centre).
-	local actions = Kit.new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(560, 74), Position = UDim2.new(0.5, -60, 1, -16), AnchorPoint = Vector2.new(0.5, 1), ZIndex = 6, Parent = frame })
+	local actions = Kit.new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(560, 74), Position = UDim2.new(0, 362, 1, -16), AnchorPoint = Vector2.new(0, 1), ZIndex = 6, Parent = frame })
 	local solo = Kit.button({ Text = "BEGIN SOLO", Size = UDim2.fromOffset(250, 74), Position = UDim2.fromOffset(0, 0), Face = C.ember, TextSize = 28, ZIndex = 7, Sound = "launch", OnActivated = function()
 		cb.onSolo(choices)
 	end, Parent = actions })
@@ -218,7 +218,7 @@ function LobbyMenu.new(parent: Instance, cb: Callbacks): Menu
 	cont.root.Visible = false
 
 	-- Small corner buttons (bottom left).
-	local corner = Kit.new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(330, 50), Position = UDim2.new(0, 16, 1, -16), AnchorPoint = Vector2.new(0, 1), ZIndex = 6, Parent = frame })
+	local corner = Kit.new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(330, 50), Position = UDim2.new(0, 16, 1, -20), AnchorPoint = Vector2.new(0, 1), ZIndex = 6, Parent = frame })
 	Kit.new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8), Parent = corner })
 	local function openOptions()
 		local panel = popup(parent, "OPTIONS", UDim2.fromOffset(520, 430))

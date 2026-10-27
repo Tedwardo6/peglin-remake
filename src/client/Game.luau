@@ -1338,8 +1338,33 @@ local function applySettings(s: { [string]: any })
 	Audio.setVolumes(settingsState.sfx, settingsState.music)
 end
 
+-- Avatar copies arrive from the server a moment after joining: swap any
+-- stand-in hero for the real avatar once it exists.
+local lastHeroCheck = 0
+local function upgradeHeroes()
+	if os.clock() - lastHeroCheck < 0.5 then
+		return
+	end
+	lastHeroCheck = os.clock()
+	local folder = game:GetService("ReplicatedStorage"):FindFirstChild("HeroModels")
+	if folder == nil then
+		return
+	end
+	for _, set in { heroes, lobbyHeroes } do
+		for uid, h in set do
+			if h.fallback and folder:FindFirstChild(tostring(uid)) then
+				local nh = Hero.new(heroFolder, uid, h.kit, h.color, h.spot, h.facing)
+				nh.reducedMotion = h.reducedMotion
+				h:destroy()
+				set[uid] = nh
+			end
+		end
+	end
+end
+
 -- Per-frame upkeep: aim guide, threat telegraph, HP display.
 local function step(_dt: number)
+	upgradeHeroes()
 	local enc = encSnap
 	local now = serverNow()
 	local fighting = (enc ~= nil and runSnap ~= nil and (runSnap :: any).state == "fight") or practice
