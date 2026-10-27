@@ -49,6 +49,7 @@ export type Monster = typeof(setmetatable(
 		light: PointLight?,
 		bubble: BasePart,
 		hip: Vector3,
+		seated: boolean, -- sits on a fixed base (a throne): leans less
 		t: number,
 		telegraph: number,
 		teleS: number, -- smoothed wind-up actually shown
@@ -347,8 +348,12 @@ function Monster._joints(self: Monster)
 	local cb = boxOf(core :: Rig)
 	local coreCenter = (cb.min + cb.max) / 2
 	local legTop = -math.huge
+	self.seated = false
 	for _, r in self.rig do
 		local b = boxOf(r)
+		if r.role == "base" then
+			self.seated = true
+		end
 		if r.role == "leg" then
 			legTop = math.max(legTop, b.max.Y)
 		end
@@ -465,7 +470,7 @@ function Monster._step(self: Monster, dt: number)
 	local shake = if self.urgent and not rm then (math.random() - 0.5) * 0.12 else 0
 	-- Whole-body pose (model space): flinch leans away from the heroes
 	-- (+Z in model space is behind the monster), lunge leans in.
-	local lean = math.rad(self.flinch * 9 + self.stagger * 8 - lunge * 16 + tele * 6)
+	local lean = math.rad(self.flinch * 9 + self.stagger * 8 - lunge * 16 + tele * 6) * (if self.seated then 0.55 else 1)
 	local bodyPose = CFrame.new(shake, rise + hover + breathe * 0.012 * self.height, self.flinch * 0.35 - lunge * 0.9) * rotAbout(self.hip, CFrame.Angles(lean, 0, 0))
 	local poses: { CFrame } = table.create(#self.rig)
 	local armPitch: { number } = table.create(#self.rig, 0)
