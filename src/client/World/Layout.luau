@@ -20,11 +20,15 @@ Layout.BOARD_H = Config.Board.HEIGHT * Layout.S
 Layout.BOARD_CENTER = Layout.ROOT + Vector3.new(0, 11, 0)
 Layout.PEG_Z = 0.32 -- pegs sit in front of the backplate
 Layout.BALL_Z = 0.55
-Layout.FLOOR_Y = Layout.ROOT.Y - 1.2
+Layout.FLOOR_Y = Layout.ROOT.Y - 1.2 -- ground the altar stands on
+-- The battle ledge is raised so the party and the monster stand at the
+-- board's mid-height: clear of the HUD along the bottom of the screen.
+Layout.BATTLE_Y = Layout.BOARD_CENTER.Y - 6.6
+Layout.LEDGE_X = Layout.BOARD_CENTER.X + 9 -- ledge starts right of the altar
 
 -- Battlefield: heroes stand in a staggered line facing the monster.
-Layout.HERO_ANCHOR = Vector3.new(Layout.BOARD_CENTER.X + 12.5, Layout.FLOOR_Y, Layout.BOARD_CENTER.Z - 3)
-Layout.MONSTER_BASE = Vector3.new(Layout.BOARD_CENTER.X + 28.5, Layout.FLOOR_Y, Layout.BOARD_CENTER.Z - 6)
+Layout.HERO_ANCHOR = Vector3.new(Layout.BOARD_CENTER.X + 11.5, Layout.BATTLE_Y, Layout.BOARD_CENTER.Z - 3)
+Layout.MONSTER_BASE = Vector3.new(Layout.BOARD_CENTER.X + 23.6, Layout.BATTLE_Y, Layout.BOARD_CENTER.Z - 6)
 Layout.HERO_FACING = Vector3.new(1, 0, 0.55).Unit
 Layout.MONSTER_FACING = Vector3.new(-1, 0, 0.75).Unit
 
@@ -53,10 +57,10 @@ end
 function Layout.heroSpot(seat: number, count: number): Vector3
 	local a = Layout.HERO_ANCHOR
 	local spots = {
-		Vector3.new(2.6, 0, 1.2),
-		Vector3.new(-0.4, 0, -1.6),
-		Vector3.new(-1.6, 0, 2.4),
-		Vector3.new(-3.8, 0, -0.2),
+		Vector3.new(2.4, 0, 1.2),
+		Vector3.new(0.4, 0, -1.6),
+		Vector3.new(-0.6, 0, 2.2),
+		Vector3.new(-2.0, 0, -0.6),
 	}
 	if count == 1 then
 		return a + Vector3.new(1.4, 0, 0.4)

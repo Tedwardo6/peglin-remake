@@ -33,6 +33,7 @@ export type Hero = typeof(setmetatable(
 		cast: number,
 		hurt: number,
 		down: boolean,
+		watching: boolean,
 		cape: BasePart?,
 		capeWeld: Weld?,
 		weaponTip: Attachment?,
@@ -289,6 +290,7 @@ function Hero.new(parent: Instance, uid: number, kit: string, color: Color3, spo
 	self.cast = 0
 	self.hurt = 0
 	self.down = false
+	self.watching = false
 	self.banked = 0
 	self.bankShownAt = 0
 	self.t = math.random() * 10
@@ -383,6 +385,8 @@ function Hero._place(self: Hero)
 	local cf = CFrame.lookAt(pos, pos + self.facing)
 	if self.down then
 		cf = cf * CFrame.Angles(math.rad(-75), 0, 0) * CFrame.new(0, -1.5, 0)
+	elseif self.watching then
+		cf = cf * CFrame.Angles(math.rad(-12), 0, 0)
 	elseif self.hurt > 0 then
 		cf = cf * CFrame.Angles(math.rad(-10 * self.hurt), 0, 0)
 	end
@@ -396,13 +400,17 @@ function Hero._place(self: Hero)
 	end
 end
 
-function Hero.setVitals(self: Hero, hull: number, maxHull: number, shield: number, defeated: boolean)
+-- `watching` (idle, sitting this fight out) slumps the hero instead of
+-- knocking them flat: only a real knock-out lies them down.
+function Hero.setVitals(self: Hero, hull: number, maxHull: number, shield: number, defeated: boolean, watching: boolean?)
 	local f = if maxHull > 0 then math.clamp(hull / maxHull, 0, 1) else 0
 	self.hpFill.Size = UDim2.fromScale(f, 1)
 	self.shieldFill.Size = UDim2.fromScale(if maxHull > 0 then math.clamp(shield / maxHull, 0, 1) else 0, 1)
-	if defeated ~= self.down then
+	local w = (watching == true) and not defeated
+	if defeated ~= self.down or w ~= self.watching then
 		self.down = defeated
-		self.nameLabel.TextTransparency = if defeated then 0.5 else 0
+		self.watching = w
+		self.nameLabel.TextTransparency = if defeated or w then 0.5 else 0
 	end
 end
 

@@ -226,33 +226,50 @@ end
 
 -- Battlefield ---------------------------------------------------------------
 
-local function buildFloor(p: ActPalette)
+local function buildFloor(p: ActPalette, isle: boolean)
 	floorTiles = {}
 	local c = Layout.BOARD_CENTER
 	local tile = 3
-	local x0 = c.X + 7.5
+	local x0 = Layout.LEDGE_X + 0.5
 	local z0 = c.Z + 6
+	local fy = Layout.BATTLE_Y
 	local a = rgb(212, 204, 255):Lerp(p.glow, 0.15)
 	local b = rgb(14, 14, 44)
 	for ix = 0, 11 do
 		for iz = 0, 7 do
 			local dark = (ix + iz) % 2 == 0
 			local col = if dark then b else a
-			local part = Build.block(setFolder, Vector3.new(tile, 0.6, tile), CFrame.new(x0 + ix * tile + tile / 2, Layout.FLOOR_Y - 0.3, z0 - iz * tile - tile / 2), col, {
+			local part = Build.block(setFolder, Vector3.new(tile, 0.6, tile), CFrame.new(x0 + ix * tile + tile / 2, fy - 0.3, z0 - iz * tile - tile / 2), col, {
 				material = if dark then Enum.Material.Glass else Enum.Material.Marble,
 				reflect = if dark then 0.15 else 0.05,
 			})
 			table.insert(floorTiles, { part = part :: BasePart, a = col, b = if dark then p.glow:Lerp(b, 0.6) else a:Lerp(p.accent, 0.5), phase = ix * 0.35 + iz * 0.2 })
 		end
 	end
-	-- Stone apron under the altar and around the checkerboard.
+	-- Stone apron under the altar.
 	Build.block(setFolder, Vector3.new(80, 1, 40), CFrame.new(c.X + 14, Layout.FLOOR_Y - 1.1, c.Z - 10), rgb(20, 18, 48), { material = Enum.Material.Slate })
+	-- The raised battle ledge: a cliff of dark stone with a glowing rune seam.
+	if not isle then
+		local bottom = Layout.FLOOR_Y - 2
+		local top = fy - 0.6
+		local depth = 56
+		Build.block(setFolder, Vector3.new(60, top - bottom, depth), CFrame.new(Layout.LEDGE_X + 30, (top + bottom) / 2, z0 - depth / 2), rgb(18, 16, 44), { material = Enum.Material.Slate })
+		Build.block(setFolder, Vector3.new(1.2, top - bottom, 1.2), CFrame.new(Layout.LEDGE_X + 0.2, (top + bottom) / 2, z0 - 0.2), rgb(30, 28, 66), { material = Enum.Material.Cobblestone })
+	end
+	local seam = Build.block(setFolder, Vector3.new(36.4, 0.16, 0.12), CFrame.new(x0 + 18, fy - 0.75, z0 + 0.04), p.glow, { material = Enum.Material.Neon })
+	pulseOn(seam, 0.1, 1.6)
+	for i = 0, 5 do
+		-- Hanging glow-roots down the cliff face.
+		local h = 1.6 + (i * 7 % 5) * 0.5
+		local root = Build.block(setFolder, Vector3.new(0.14, h, 0.14), CFrame.new(x0 + 2.5 + i * 6.1, fy - 0.8 - h / 2, z0 + 0.06), p.accent, { material = Enum.Material.Neon, transparency = 0.2 })
+		pulseOn(root, 0.2, 0.9 + i * 0.17)
+	end
 	-- Rails along the front edge.
 	for i = 0, 7 do
-		local x = x0 + 1 + i * 4.6
-		Build.cylinder(setFolder, 1.4, 0.3, CFrame.new(x, Layout.FLOOR_Y + 0.7, z0 + 0.2) * CFrame.Angles(0, 0, math.rad(90)), rgb(90, 60, 40), { material = Enum.Material.Wood })
+		local x = x0 + 1 + i * 4.8
+		Build.cylinder(setFolder, 1.4, 0.3, CFrame.new(x, fy + 0.7, z0 + 0.2) * CFrame.Angles(0, 0, math.rad(90)), rgb(90, 60, 40), { material = Enum.Material.Wood })
 	end
-	Build.block(setFolder, Vector3.new(34, 0.25, 0.3), CFrame.new(x0 + 17, Layout.FLOOR_Y + 1.45, z0 + 0.2), rgb(110, 76, 50), { material = Enum.Material.Wood })
+	Build.block(setFolder, Vector3.new(34.6, 0.25, 0.3), CFrame.new(x0 + 17.8, fy + 1.45, z0 + 0.2), rgb(110, 76, 50), { material = Enum.Material.Wood })
 end
 
 local function torch(pos: Vector3, p: ActPalette)
@@ -308,7 +325,7 @@ end
 
 local function buildSet(scene: string, p: ActPalette)
 	local c = Layout.BOARD_CENTER
-	local fy = Layout.FLOOR_Y
+	local fy = Layout.BATTLE_Y
 	local backZ = c.Z - 22
 	if scene == "crypt" then
 		-- Drowned crypt: broken arches, torches, glowing water channel.
@@ -325,10 +342,11 @@ local function buildSet(scene: string, p: ActPalette)
 	elseif scene == "isle" then
 		-- Floating isle: the battlefield sits on an island; waterfalls pour
 		-- from its edges into a glowing sea far below; ruined temples behind.
-		Build.block(setFolder, Vector3.new(56, 8, 34), CFrame.new(c.X + 18, fy - 5.2, c.Z - 10), rgb(16, 18, 40), { material = Enum.Material.Rock })
-		Build.wedge(setFolder, Vector3.new(56, 10, 14), CFrame.new(c.X + 18, fy - 14, c.Z + 0) * CFrame.Angles(math.rad(180), 0, 0), rgb(14, 14, 34), { material = Enum.Material.Rock })
+		local ix = Layout.LEDGE_X + 23
+		Build.block(setFolder, Vector3.new(46, 8, 34), CFrame.new(ix, fy - 4.6, c.Z - 10), rgb(16, 18, 40), { material = Enum.Material.Rock })
+		Build.wedge(setFolder, Vector3.new(46, 10, 14), CFrame.new(ix, fy - 13.6, c.Z + 0) * CFrame.Angles(math.rad(180), 0, 0), rgb(14, 14, 34), { material = Enum.Material.Rock })
 		for i = 0, 2 do
-			waterfall(Vector3.new(c.X + 6 + i * 18, fy - 1.5, c.Z + 6.5), 40, 3, p)
+			waterfall(Vector3.new(Layout.LEDGE_X + 6 + i * 15, fy - 1.5, c.Z + 6.5), 40, 3, p)
 		end
 		Build.block(setFolder, Vector3.new(400, 1, 300), CFrame.new(c.X, fy - 60, c.Z - 80), p.glow:Lerp(p.deep, 0.5), { material = Enum.Material.ForceField, transparency = 0.1 })
 		for i = 0, 2 do
@@ -403,7 +421,7 @@ function Scenery.setScene(scene: string, p: ActPalette)
 	currentScene = scene
 	setFolder:ClearAllChildren()
 	buildSky(p, scene)
-	buildFloor(p)
+	buildFloor(p, scene == "isle")
 	buildSet(scene, p)
 end
 

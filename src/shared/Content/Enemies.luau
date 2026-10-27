@@ -73,7 +73,7 @@ local LIST: { EnemyDef } = {
 		cadence = 20,
 		firstDelay = 24,
 		cycle = { slam(5) },
-		look = { model = "imp", height = 4.2, glow = c(90, 200, 255) },
+		look = { model = "imp", height = 5.6, glow = c(90, 200, 255) },
 		blurb = "Slow and forgiving. Slams every 20 s.",
 	},
 	{
@@ -95,7 +95,7 @@ local LIST: { EnemyDef } = {
 		cadence = 18,
 		firstDelay = 18,
 		cycle = { double(5) },
-		look = { model = "hound", height = 5.4, glow = c(80, 160, 255) },
+		look = { model = "hound", height = 6.2, glow = c(80, 160, 255) },
 		blurb = "Strikes twice in a row.",
 	},
 	{

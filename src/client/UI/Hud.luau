@@ -128,7 +128,7 @@ function Hud.new(gui: Instance, onSelectSlot: (number) -> (), onLaunch: () -> ()
 	self.keyButton = Kit.button({ Text = "?", Size = UDim2.fromOffset(60, 58), Position = UDim2.new(1, -86, 0, 12), AnchorPoint = Vector2.new(1, 0), Face = C.panelLight, TextSize = 30, Depth = 6, OnActivated = onKey, Parent = root })
 
 	-- Monster panel (top-right, above the monster).
-	local enemyPanel = Kit.panel({ Name = "Enemy", Size = UDim2.fromOffset(360, 92), Position = UDim2.new(1, -16, 0, 80), AnchorPoint = Vector2.new(1, 0), Color = C.panel, Parent = root })
+	local enemyPanel = Kit.panel({ Name = "Enemy", Size = UDim2.fromOffset(360, 92), Position = UDim2.fromOffset(356, 12), Color = C.panel, Parent = root })
 	self.enemyPanel = enemyPanel
 	self.enemyName = Kit.label({ Text = "Monster", Title = true, Bold = true, TextSize = 28, Size = UDim2.new(1, -20, 0, 30), Position = UDim2.fromOffset(10, 4), TextXAlignment = Enum.TextXAlignment.Left, Parent = enemyPanel })
 	self.phaseLabel = Kit.label({ Text = "", TextSize = 16, TextColor3 = C.gold, Size = UDim2.new(1, -20, 0, 20), Position = UDim2.fromOffset(10, 6), TextXAlignment = Enum.TextXAlignment.Right, Parent = enemyPanel })
@@ -148,7 +148,7 @@ function Hud.new(gui: Instance, onSelectSlot: (number) -> (), onLaunch: () -> ()
 	self.legend = legend
 
 	-- Threat card (right, mid-height near the monster's head).
-	local card = Kit.panel({ Name = "Threat", Size = UDim2.fromOffset(250, 96), Position = UDim2.new(1, -16, 0, 206), AnchorPoint = Vector2.new(1, 0), Color = Color3.fromRGB(70, 20, 34), StrokeColor = C.threat, Parent = root })
+	local card = Kit.panel({ Name = "Threat", Size = UDim2.fromOffset(250, 96), Position = UDim2.new(1, -16, 0, 82), AnchorPoint = Vector2.new(1, 0), Color = Color3.fromRGB(70, 20, 34), StrokeColor = C.threat, Parent = root })
 	self.threatCard = card
 	self.threatScale = Kit.new("UIScale", { Parent = card })
 	self.threatTitle = Kit.label({ Text = "Slam", Title = true, Bold = true, TextSize = 26, TextColor3 = C.threat, Size = UDim2.new(1, -86, 0, 30), Position = UDim2.fromOffset(12, 8), TextXAlignment = Enum.TextXAlignment.Left, Parent = card })

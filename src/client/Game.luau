@@ -459,7 +459,7 @@ local function syncHeroes()
 				h = existing
 				h:setSpot(spot, Layout.HERO_FACING)
 			end
-			h:setVitals(tp.hull, tp.maxHull, tp.shield, tp.defeated or not tp.active)
+			h:setVitals(tp.hull, tp.maxHull, tp.shield, tp.defeated, not tp.active)
 		end
 	end
 end

@@ -33,7 +33,7 @@ local KIND = {
 	elite = { glyph = "☠", name = "Elite", color = Color3.fromRGB(255, 96, 120) },
 	rest = { glyph = "🔥", name = "Campfire", color = Color3.fromRGB(255, 160, 70) },
 	treasure = { glyph = "◆", name = "Treasure", color = Color3.fromRGB(255, 210, 90) },
-	boss = { glyph = "♛", name = "Boss", color = Color3.fromRGB(255, 70, 90) },
+	boss = { glyph = "👑", name = "Boss", color = Color3.fromRGB(255, 70, 90) },
 }
 
 local function describe(node: { [string]: any }): string
