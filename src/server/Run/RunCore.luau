@@ -61,7 +61,18 @@ export type Params = {
 	condition: TestCondition?,
 	maxParty: number,
 	firstIntro: boolean, -- play the long intro (first run this session)
+	startIndex: number?, -- resume from a confirmed checkpoint (solo continuation)
 }
+
+export type Preset = {
+	rack: { string },
+	components: { string },
+	ballLevels: { [string]: number },
+	hull: number,
+	maxHull: number,
+}
+
+export type Founder = { uid: number, kit: string, preset: Preset? }
 
 local Run = {}
 Run.__index = Run
@@ -150,7 +161,7 @@ function Run.newMember(uid: number, kitId: string, completed: number): Member
 	}
 end
 
-function Run.new(p: Params, founders: { { uid: number, kit: string } }): Run
+function Run.new(p: Params, founders: { Founder }): Run
 	local self = setmetatable({}, Run) :: any
 	self.id = p.id
 	self.seed = p.seed
@@ -161,7 +172,7 @@ function Run.new(p: Params, founders: { { uid: number, kit: string } }): Run
 	self.familyPool = p.familyPool
 	self.privacy = p.privacy
 	self.maxParty = p.maxParty
-	self.index = 1
+	self.index = p.startIndex or 1
 	self.state = "fight"
 	self.stateAt = p.now
 	self.stateEndsAt = math.huge
@@ -177,6 +188,14 @@ function Run.new(p: Params, founders: { { uid: number, kit: string } }): Run
 	self.lastOutcome = nil
 	for _, f in founders do
 		local m = Run.newMember(f.uid, f.kit, 0)
+		if f.preset then
+			local pr = f.preset :: Preset
+			m.rack = table.clone(pr.rack)
+			m.components = table.clone(pr.components)
+			m.ballLevels = table.clone(pr.ballLevels)
+			m.hull = pr.hull
+			m.maxHull = pr.maxHull
+		end
 		if p.mode == "test" then
 			table.insert(m.components, Run.TEST_UPGRADE)
 		end
@@ -644,13 +663,16 @@ function Run.tick(self: Run, now: number)
 			anyone = true
 		end
 	end
-	if not anyone and self.state ~= "abandoned" then
-		self.state = "abandoned"
-		emit(self, { type = "abandoned" })
+	if not anyone then
+		if self.state ~= "abandoned" then
+			self.state = "abandoned"
+			emit(self, { type = "abandoned" })
+		end
 		return
 	end
+	local state: string = self.state
 
-	if self.state == "fight" then
+	if state == "fight" then
 		local enc = self.encounter :: Encounter.Encounter
 		Encounter.tick(enc, now)
 		for _, ev in Encounter.drain(enc) do
@@ -662,7 +684,7 @@ function Run.tick(self: Run, now: number)
 		elseif enc.phase == "lost" then
 			finishEncounter(self, now, false)
 		end
-	elseif self.state == "reward" then
+	elseif state == "reward" then
 		-- Let accepted shots finish their visuals; no further consequences.
 		if self.encounter then
 			Encounter.tick(self.encounter :: Encounter.Encounter, now)
@@ -671,7 +693,7 @@ function Run.tick(self: Run, now: number)
 		if now >= self.stateEndsAt then
 			openDraft(self, now)
 		end
-	elseif self.state == "draft" then
+	elseif state == "draft" then
 		local allPicked = true
 		for _, m in Run.activeMembers(self) do
 			if not m.picked then

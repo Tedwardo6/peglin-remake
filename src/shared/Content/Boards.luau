@@ -170,7 +170,7 @@ local SPECS: { BoardSpec } = {
 }
 
 local function build(spec: BoardSpec): Board
-	local pegs = {}
+	local pegs: { { x: number, y: number, kind: Pegs.PegKind } } = {}
 	for _, row in spec.rows do
 		local expected = if row.off then 9 else 10
 		if #row.pattern ~= expected then
@@ -184,7 +184,8 @@ local function build(spec: BoardSpec): Board
 					error(`board {spec.id}: unknown peg symbol '{ch}'`)
 				end
 				local x = if row.off then 6 * i else 6 * i - 3
-				table.insert(pegs, { x = x, y = row.y, kind = kind })
+				local entry: { x: number, y: number, kind: Pegs.PegKind } = { x = x, y = row.y, kind = kind :: Pegs.PegKind }
+				table.insert(pegs, entry)
 			end
 		end
 	end
