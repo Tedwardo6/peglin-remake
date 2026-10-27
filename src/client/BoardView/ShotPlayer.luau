@@ -32,8 +32,9 @@ export type ShotPlayer = typeof(setmetatable(
 		hits: { Scoring.Hit },
 		walls: { Solver.SimEvent },
 		cb: Callbacks,
-		t: number,
-		stop: number,
+		startClock: number,
+		paused: number,
+		stopUntil: number,
 		nextHit: number,
 		nextWall: number,
 		ball: Model,
@@ -59,8 +60,11 @@ function ShotPlayer.new(parent: Instance, sim: Solver.SimResult, outcome: Scorin
 		end
 	end
 	self.cb = cb
-	self.t = startOffset or 0
-	self.stop = 0
+	-- Time comes from the clock, not summed frame deltas, so the ball stays
+	-- on the server's timeline even through dropped or throttled frames.
+	self.startClock = os.clock() - (startOffset or 0)
+	self.paused = 0
+	self.stopUntil = 0
 	self.nextHit = 1
 	self.nextWall = 1
 	self.done = false
@@ -104,7 +108,11 @@ function ShotPlayer.new(parent: Instance, sim: Solver.SimResult, outcome: Scorin
 end
 
 function ShotPlayer.hitStop(self: ShotPlayer, seconds: number)
-	self.stop = math.max(self.stop, seconds)
+	local now = os.clock()
+	if now >= self.stopUntil then
+		self.stopUntil = now + seconds
+		self.paused += seconds
+	end
 end
 
 local function place(self: ShotPlayer, pos: Vector3)
@@ -145,13 +153,13 @@ function ShotPlayer._step(self: ShotPlayer, dt: number)
 		end
 		return
 	end
-	if self.stop > 0 then
-		self.stop -= dt
+	local now = os.clock()
+	if now < self.stopUntil then
 		return
 	end
-	self.t += dt
+	local t = now - self.startClock - self.paused
 	local sim = self.sim
-	local fstep = self.t * STEP_HZ
+	local fstep = t * STEP_HZ
 	local s0 = math.floor(fstep)
 	local frac = fstep - s0
 	local last = sim.steps
@@ -178,7 +186,7 @@ function ShotPlayer._step(self: ShotPlayer, dt: number)
 		local i = self.nextHit
 		self.nextHit += 1
 		self.cb.onHit(self.hits[i], i)
-		if self.stop > 0 then
+		if os.clock() < self.stopUntil then
 			return
 		end
 	end

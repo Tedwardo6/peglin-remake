@@ -19,8 +19,8 @@ Layout.MONSTER_BASE = Layout.BOARD_CENTER + Vector3.new(15.5, -6.5, -2.5)
 Layout.FLOOR_Y = Layout.ROOT.Y - 1.2
 
 -- Region the fight camera must show (cabinet, HUD margin, monster).
-Layout.VIEW_MIN = Vector2.new(-11.5, -10.2)
-Layout.VIEW_MAX = Vector2.new(24, 10.4)
+Layout.VIEW_MIN = Vector2.new(-15, -11)
+Layout.VIEW_MAX = Vector2.new(30, 12.5)
 
 function Layout.boardToWorld(x: number, y: number, z: number?): Vector3
 	local c = Layout.BOARD_CENTER

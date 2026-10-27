@@ -50,10 +50,9 @@ function Workshop.build(parent: Instance): Handles
 	-- Window with daylight glow (left of the cabinet).
 	local winC = Vector3.new(root.X - 21, fy + 21, wallZ + 0.6)
 	Build.block(model, Vector3.new(13, 12, 0.6), CFrame.new(winC), c(250, 236, 200))
-	local glass = Build.block(model, Vector3.new(11.6, 10.6, 0.4), CFrame.new(winC + Vector3.new(0, 0, 0.2)), c(170, 230, 255), { material = Enum.Material.Neon, transparency = 0.15 })
+	Build.block(model, Vector3.new(11.6, 10.6, 0.4), CFrame.new(winC + Vector3.new(0, 0, 0.2)), c(170, 230, 255), { material = Enum.Material.Neon, transparency = 0.15 })
 	Build.block(model, Vector3.new(0.5, 10.6, 0.5), CFrame.new(winC + Vector3.new(0, 0, 0.45)), c(250, 236, 200))
 	Build.block(model, Vector3.new(11.6, 0.5, 0.5), CFrame.new(winC + Vector3.new(0, 0, 0.45)), c(250, 236, 200))
-	Build.light(glass, c(220, 240, 255), 1.4, 28)
 
 	-- Pegboard of tools (right of the cabinet, behind the stage).
 	local pbC = Vector3.new(root.X + 26, fy + 22, wallZ + 0.6)
@@ -118,12 +117,10 @@ function Workshop.build(parent: Instance): Handles
 		Build.block(model, Vector3.new(0.2, 8, 0.2), CFrame.new(lx, fy + 38, bz + 2), Build.INK)
 		Build.cylinder(model, 1.6, 3.2, CFrame.new(lx, fy + 33.6, bz + 2) * CFrame.Angles(0, 0, math.rad(90)), c(255, 214, 64))
 		local bulb = Build.ball(model, 1.4, Vector3.new(lx, fy + 32.6, bz + 2), c(255, 244, 210), { material = Enum.Material.Neon })
-		Build.light(bulb, c(255, 236, 200), 1.6, 34)
 		table.insert(lamps, bulb)
 	end
-	-- A soft fill light in front of the cabinet so the board reads clearly.
-	local fill = Build.block(model, Vector3.new(1, 1, 1), CFrame.new(Layout.BOARD_CENTER + Vector3.new(4, 4, 18)), Color3.new(1, 1, 1), { transparency = 1 })
-	Build.light(fill, c(255, 250, 240), 1.2, 40)
+	-- No PointLights: on lower graphics levels (common on phones) they wash
+	-- the whole room out. The place's own Lighting does the work.
 
 	return {
 		model = model,

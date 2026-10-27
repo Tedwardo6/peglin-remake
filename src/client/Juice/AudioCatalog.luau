@@ -32,7 +32,7 @@ local Cues: { [string]: CueDef } = {
 	spring = cue(S .. "action_jump.mp3", 0.55, 1.3, 0.05, 2, 0.05),
 	wall = cue(S .. "clickfast.wav", 0.4, 0.7, 0.08, 3, 0.03),
 	launch = cue(S .. "Rocket shot.wav", 0.45, 1.25, 0.03, 2, 0.1),
-	drain = cue(S .. "swoosh.wav", 0.35, 0.7, 0.03, 2, 0.1),
+	drain = cue(S .. "Rocket whoosh 01.wav", 0.35, 0.7, 0.03, 2, 0.1),
 	aimTick = cue(S .. "clickfast.wav", 0.12, 1.8, 0.05, 2, 0.06),
 	-- Monster and threats
 	flinch = cue(S .. "collide.wav", 0.35, 1.1, 0.1, 3, 0.06),
@@ -44,18 +44,18 @@ local Cues: { [string]: CueDef } = {
 	monsterDeath = cue(S .. "glassbreak.wav", 0.6, 0.8, 0, 1, 0.5),
 	armorUp = cue(S .. "unsheath.wav", 0.5, 0.7, 0, 1, 0.3),
 	-- Relay
-	chargeSend = cue(S .. "swoosh.wav", 0.6, 1.5, 0, 2, 0.1),
+	chargeSend = cue(S .. "Rocket whoosh 01.wav", 0.6, 1.5, 0, 2, 0.1),
 	chargeArrive = cue(S .. "electronicpingshort.wav", 0.6, 2.0, 0, 2, 0.1),
 	chargeUse = cue(S .. "Rocket whoosh 01.wav", 0.5, 1.4, 0, 2, 0.1),
 	-- UI
 	click = cue(S .. "clickfast.wav", 0.5, 1.0, 0.03, 3, 0.04),
 	hover = cue(S .. "clickfast.wav", 0.12, 1.6, 0.03, 2, 0.05),
-	open = cue(S .. "swoosh.wav", 0.3, 1.3, 0.03, 2, 0.1),
+	open = cue(S .. "Rocket whoosh 01.wav", 0.3, 1.3, 0.03, 2, 0.1),
 	reward = cue(S .. "electronicpingshort.wav", 0.6, 0.9, 0, 2, 0.1),
 	victory = cue(S .. "electronicpingshort.wav", 0.6, 0.67, 0, 1, 0.5),
 	defeat = cue(S .. "HalloweenGhost.wav", 0.45, 1.0, 0, 1, 0.5),
 	reject = cue(S .. "clickfast.wav", 0.4, 0.5, 0, 1, 0.15),
-	whoosh = cue(S .. "swoosh.wav", 0.4, 1.0, 0.05, 2, 0.1),
+	whoosh = cue(S .. "Rocket whoosh 01.wav", 0.4, 1.0, 0.05, 2, 0.1),
 }
 
 return {

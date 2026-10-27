@@ -38,7 +38,7 @@ type Card = {
 	aimDots: { Frame },
 	target: UIStroke,
 	status: TextLabel,
-	playing: { sim: Solver.SimResult, hits: { Scoring.Hit }, t: number, nextHit: number }?,
+	playing: { sim: Solver.SimResult, hits: { Scoring.Hit }, start: number, nextHit: number }?,
 }
 
 local Teammates = {}
@@ -219,7 +219,7 @@ function Teammates.play(self: Teammates, uid: number, sim: Solver.SimResult, hit
 			card.dots[i].BackgroundColor3 = Pegs.Defs[p.kind].color
 		end
 	end
-	card.playing = { sim = sim, hits = hits, t = offset, nextHit = 1 }
+	card.playing = { sim = sim, hits = hits, start = os.clock() - offset, nextHit = 1 }
 	card.ball.Visible = true
 	for _, a in card.aimDots do
 		a.Visible = false
@@ -256,12 +256,11 @@ function Teammates.flashCard(self: Teammates, uid: number, color: Color3)
 	end
 end
 
-function Teammates._step(self: Teammates, dt: number)
+function Teammates._step(self: Teammates, _dt: number)
 	for _, card in self.cards do
 		local pl = card.playing
 		if pl then
-			pl.t += dt
-			local step = pl.t * Config.Sim.STEP_HZ
+			local step = (os.clock() - pl.start) * Config.Sim.STEP_HZ
 			local s = math.clamp(math.floor(step), 1, pl.sim.steps)
 			card.ball.Position = toMini(pl.sim.xs[s], pl.sim.ys[s])
 			while pl.nextHit <= #pl.hits and pl.hits[pl.nextHit].step <= step do

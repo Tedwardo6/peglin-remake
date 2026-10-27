@@ -12,15 +12,14 @@ All sounds are Roblox-provided client sounds (`rbxasset://sounds/...`). They shi
 | `rbxasset://sounds/clickfast.wav` | UI click and hover, wall bounce, aim tick, countdown, reject |
 | `rbxasset://sounds/Rocket shot.wav` | launch, burst peg, big hit |
 | `rbxasset://sounds/action_jump.mp3` | spring peg |
-| `rbxasset://sounds/swoosh.wav` | ball drain, panel open, title cards, charge send |
-| `rbxasset://sounds/Rocket whoosh 01.wav` | charge use |
+| `rbxasset://sounds/Rocket whoosh 01.wav` | ball drain, panel open, title cards, charge send, charge use |
 | `rbxasset://sounds/collide.wav` | monster flinch |
 | `rbxasset://sounds/HalloweenThunder.wav` | threat telegraph, threat landing |
 | `rbxasset://sounds/unsheath.wav` | shield block, armor up |
 | `rbxasset://sounds/glassbreak.wav` | monster death |
 | `rbxasset://sounds/HalloweenGhost.wav` | defeat |
 
-Load status in a Studio play session: see the handoff in STATUS.md. Any cue that fails to load stays silent and never blocks input.
+Load status (Studio Play session, October 27, 2026): every file above loaded. `rbxasset://sounds/swoosh.wav` was tried first and refused by Studio ("Asset is not approved for the requester"), so its four cues were moved to `Rocket whoosh 01.wav`; no load errors appeared after that change. Any cue that fails to load stays silent and never blocks input.
 
 **Music:** none selected. A licensed or Roblox-provided track still needs choosing and listening approval.
 

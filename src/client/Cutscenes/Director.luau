@@ -19,7 +19,7 @@ local C = Theme.Color
 
 local Director = {}
 
-local FOV = 34
+local FOV = 48
 local cam: Camera
 local mode: "fight" | "workshop" | "move" = "workshop"
 local moveFrom: CFrame = CFrame.identity

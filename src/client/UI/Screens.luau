@@ -97,8 +97,8 @@ function Screens.draft(offer: { DraftOption }, rack: { string }, rerolls: number
 	local m = modal("Draft", UDim2.fromOffset(820, 470))
 	local p = m.panel
 	Kit.label({ Text = "PICK AN UPGRADE", TextSize = 38, Bold = true, Size = UDim2.new(1, 0, 0, 44), Position = UDim2.fromOffset(0, 12), ZIndex = 22, Parent = p })
-	Kit.label({ Text = title, TextSize = 18, TextColor3 = C.textDim, Size = UDim2.new(1, 0, 0, 22), Position = UDim2.fromOffset(0, 56), ZIndex = 22, Parent = p })
-	local cardsHolder = Kit.new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, -40, 0, 290), Position = UDim2.fromOffset(20, 88), ZIndex = 22, Parent = p })
+	Kit.label({ Text = title, TextSize = 18, TextColor3 = C.textDim, Size = UDim2.new(1, 0, 0, 24), Position = UDim2.fromOffset(0, 54), ZIndex = 22, Parent = p })
+	local cardsHolder = Kit.new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, -40, 0, 290), Position = UDim2.fromOffset(20, 100), ZIndex = 22, Parent = p })
 	local timerBar = Kit.bar({ Size = UDim2.new(1, -260, 0, 22), Position = UDim2.new(0, 20, 1, -42), Color = C.gold, TextSize = 14, ZIndex = 22, Parent = p })
 	local picked = false
 	local cards: { Frame } = {}

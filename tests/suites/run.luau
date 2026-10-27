@@ -111,6 +111,19 @@ return {
 		end,
 	},
 	{
+		name = "four sharp bots complete a run (4-player party behind the phone gate)",
+		run = function(T)
+			local run, fights, now, losses, events = playRun(T, "sharp", 4)
+			T.eq(run.state, "finished", "quad run finishes")
+			T.eq(#T.Loader.server("Run.RunCore").activeMembers(run), 4, "all four still seated")
+			local parts = {}
+			for _, f in fights do
+				table.insert(parts, string.format("%d%s:%.0fs", f.index, if f.boss then "B" else "", f.duration))
+			end
+			T.note(string.format("quad sharp: total %.1f min, losses %d, charges sent %d used %d | %s", now / 60, losses, events.chargeSent or 0, events.chargeUsed or 0, table.concat(parts, " ")))
+		end,
+	},
+	{
 		name = "test mode: identical setup across conditions, finishes with rematch offer",
 		run = function(T)
 			for _, cond in { "solo", "duo_self", "duo_teammate" } do

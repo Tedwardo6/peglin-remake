@@ -16,6 +16,12 @@ export type Palette = { frame: Color3, trim: Color3, back: Color3, glow: Color3 
 local Cabinet = {}
 Cabinet.__index = Cabinet
 
+-- The turret sits in the header's shade; lift its colour so it still reads
+-- as the leg's bright trim rather than a muddy blob.
+function Cabinet.turretColor(trim: Color3): Color3
+	return trim:Lerp(Color3.new(1, 1, 1), 0.35)
+end
+
 export type Cabinet = typeof(setmetatable(
 	{} :: {
 		model: Model,
@@ -156,7 +162,7 @@ function Cabinet.new(parent: Instance, palette: Palette): Cabinet
 
 	-- Launcher turret at the board's launch point, poking out of the header.
 	local launchPos = Layout.boardToWorld(30, 3, 0.9)
-	self.turretBase = Build.ball(self.model, 2.4, launchPos + Vector3.new(0, 0.35, 0), palette.trim, { name = "Turret" })
+	self.turretBase = Build.ball(self.model, 2.4, launchPos + Vector3.new(0, 0.35, 0), Cabinet.turretColor(palette.trim), { name = "Turret" })
 	self.barrel = Build.cylinder(self.model, 2.0, 1.0, CFrame.new(launchPos), Color3.fromRGB(245, 245, 255), { name = "Barrel" })
 	self.barrelCap = Build.cylinder(self.model, 0.35, 1.25, CFrame.new(launchPos), Build.INK, { name = "BarrelCap" })
 	local att = Instance.new("Attachment")
@@ -198,7 +204,7 @@ function Cabinet.setPalette(self: Cabinet, palette: Palette, animate: boolean?)
 		end
 	end
 	to(self.backPart, palette.back)
-	to(self.turretBase, palette.trim)
+	to(self.turretBase, Cabinet.turretColor(palette.trim))
 	for _, gp in self.glowParts do
 		to(gp, palette.glow)
 	end

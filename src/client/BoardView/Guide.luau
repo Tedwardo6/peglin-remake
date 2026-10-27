@@ -36,7 +36,7 @@ function Guide.new(parent: Instance): Guide
 	self.fronts = {}
 	self.backs = {}
 	for i = 1, SOLID + HINT do
-		local d = if i <= SOLID then 0.2 else 0.14
+		local d = if i <= SOLID then 0.28 else 0.18
 		table.insert(self.backs, Build.disc(self.model, d + 0.1, 0.05, Vector3.zero, Build.INK))
 		table.insert(self.fronts, Build.disc(self.model, d, 0.05, Vector3.zero, Color3.new(1, 1, 1)))
 	end

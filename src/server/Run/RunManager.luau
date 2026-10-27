@@ -1039,12 +1039,12 @@ function RunManager.start()
 		end
 		-- Server game-work timing (budget: p95 < 4 ms/frame at the 8-player cap).
 		table.insert(tickTimes, (os.clock() - t0) * 1000)
-		if #tickTimes >= 600 then
+		if #tickTimes >= 3600 then
 			table.sort(tickTimes)
 			local p95 = tickTimes[math.floor(#tickTimes * 0.95)]
 			local maxv = tickTimes[#tickTimes]
-			if RunService:IsStudio() then
-				print(string.format("[perf] server game work over 600 frames: p95 %.3f ms, max %.3f ms, players %d, runs %d", p95, maxv, #Players:GetPlayers(), (function()
+			if RunService:IsStudio() and next(runs) ~= nil then
+				print(string.format("[perf] server game work over 3600 frames: p95 %.3f ms, max %.3f ms, players %d, runs %d", p95, maxv, #Players:GetPlayers(), (function()
 					local n = 0
 					for _ in runs do
 						n += 1
