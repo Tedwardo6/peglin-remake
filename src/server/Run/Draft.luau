@@ -28,6 +28,7 @@ export type Context = {
 	seed: string, -- run seed .. member uid .. encounter index .. reroll count
 	targeted: boolean, -- this offer carries the leg's guaranteed kit pick
 	familyPool: { [string]: boolean }, -- ball families allowed in offers
+	treasure: boolean?, -- treasure nodes offer relics (components) only
 }
 
 local Draft = {}
@@ -97,7 +98,8 @@ function Draft.generate(m: MemberView, ctx: Context): { Option }
 			end
 		end
 	end
-	for _, bid in Balls.Order do
+	local ballIds: { string } = if ctx.treasure then {} else Balls.Order
+	for _, bid in ballIds do
 		local b = Balls.ById[bid]
 		if b.family ~= "core" and not owns(m.rack, bid) and ctx.familyPool[b.family] ~= false then
 			local isKit = false

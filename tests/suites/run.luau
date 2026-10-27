@@ -14,6 +14,7 @@ local function playRun(T, style, players, opts)
 		id = "r", seed = opts.seed or "seed-1", hostUid = 1, now = 0,
 		modifiers = opts.modifiers or {}, familyPool = {}, privacy = "open",
 		mode = opts.mode or "normal", condition = opts.condition, maxParty = 4, firstIntro = true,
+		campaign = "abyss",
 	}, founders)
 	local rng = Bot.lcg(opts.rngSeed or 7)
 	local now = 0
@@ -29,7 +30,7 @@ local function playRun(T, style, players, opts)
 		for _, ev in Run.drain(run) do
 			events[ev.type] = (events[ev.type] or 0) + 1
 			if ev.type == "encounterWon" then
-				table.insert(fights, { index = ev.index, boss = ev.boss, duration = ev.duration })
+				table.insert(fights, { index = ev.index, boss = ev.boss, elite = ev.elite, duration = ev.duration })
 			elseif ev.type == "encounterLost" then
 				losses += 1
 			end
@@ -41,6 +42,31 @@ local function playRun(T, style, players, opts)
 				break
 			end
 			Run.restart(run, 1, now)
+		elseif run.state == "map" then
+			for _, m in Run.activeMembers(run) do
+				if m.vote == nil then
+					local pickIdx = (rng() % #run.choices) + 1
+					-- Low hull: head for the campfire when one is offered.
+					if m.hull < m.maxHull * 0.5 then
+						for i, id in run.choices do
+							if run.map.byId[id].kind == "rest" then
+								pickIdx = i
+							end
+						end
+					end
+					Run.vote(run, m.uid, run.choices[pickIdx])
+				end
+			end
+		elseif run.state == "rest" then
+			for _, m in Run.activeMembers(run) do
+				if m.restChoice == nil then
+					if m.hull < m.maxHull * 0.8 then
+						Run.chooseRest(run, m.uid, "heal")
+					else
+						Run.chooseRest(run, m.uid, "train", 2)
+					end
+				end
+			end
 		elseif run.state == "draft" then
 			for _, m in Run.activeMembers(run) do
 				if not m.picked then
@@ -76,14 +102,16 @@ return {
 		run = function(T)
 			local run, fights, now, losses, events = playRun(T, "sharp", 1)
 			T.eq(run.state, "finished", "run finishes")
-			T.eq(#fights, 9, "nine encounters won")
+			T.check(#fights >= 7 and #fights <= 12, "between 7 and 12 fights won (path-dependent): " .. #fights)
 			local parts = {}
 			for _, f in fights do
-				table.insert(parts, string.format("%d%s:%.0fs", f.index, if f.boss then "B" else "", f.duration))
+				table.insert(parts, string.format("%d%s:%.0fs", f.index, if f.boss then "B" elseif f.elite then "E" else "", f.duration))
 			end
 			T.note(string.format("solo sharp: total %.1f min, losses %d | %s", now / 60, losses, table.concat(parts, " ")))
-			T.check((events.draftOpen or 0) == 8, "eight drafts between nine fights")
+			T.check((events.draftOpen or 0) >= #fights - 1, "a draft after every won fight except the last boss")
 			T.check((events.bossDefeated or 0) == 3, "three bosses")
+			T.eq(events.actStart or 0, 2, "two act transitions")
+			T.eq(events.pathChosen or 0, 12, "twelve nodes chosen (4 per act)")
 		end,
 	},
 	{
@@ -92,7 +120,7 @@ return {
 			local run, fights, now, losses = playRun(T, "casual", 1, { maxLosses = 30 })
 			local parts = {}
 			for _, f in fights do
-				table.insert(parts, string.format("%d%s:%.0fs", f.index, if f.boss then "B" else "", f.duration))
+				table.insert(parts, string.format("%d%s:%.0fs", f.index, if f.boss then "B" elseif f.elite then "E" else "", f.duration))
 			end
 			T.note(string.format("solo casual: state %s, %.1f min, losses %d | %s", run.state, now / 60, losses, table.concat(parts, " ")))
 			T.check(true, "recorded")
@@ -105,7 +133,7 @@ return {
 			T.eq(run.state, "finished", "duo run finishes")
 			local parts = {}
 			for _, f in fights do
-				table.insert(parts, string.format("%d%s:%.0fs", f.index, if f.boss then "B" else "", f.duration))
+				table.insert(parts, string.format("%d%s:%.0fs", f.index, if f.boss then "B" elseif f.elite then "E" else "", f.duration))
 			end
 			T.note(string.format("duo sharp: total %.1f min, losses %d, charges sent %d used %d | %s", now / 60, losses, events.chargeSent or 0, events.chargeUsed or 0, table.concat(parts, " ")))
 		end,
@@ -118,7 +146,7 @@ return {
 			T.eq(#T.Loader.server("Run.RunCore").activeMembers(run), 4, "all four still seated")
 			local parts = {}
 			for _, f in fights do
-				table.insert(parts, string.format("%d%s:%.0fs", f.index, if f.boss then "B" else "", f.duration))
+				table.insert(parts, string.format("%d%s:%.0fs", f.index, if f.boss then "B" elseif f.elite then "E" else "", f.duration))
 			end
 			T.note(string.format("quad sharp: total %.1f min, losses %d, charges sent %d used %d | %s", now / 60, losses, events.chargeSent or 0, events.chargeUsed or 0, table.concat(parts, " ")))
 		end,
@@ -146,6 +174,8 @@ return {
 		run = function(T)
 			local Run = T.Loader.server("Run.RunCore")
 			local run = Run.new({ id = "r", seed = "s", hostUid = 1, now = 0, modifiers = {}, familyPool = {}, privacy = "open", mode = "normal", maxParty = 2, firstIntro = false }, { { uid = 1, kit = "ricochet" } })
+			Run.tick(run, Run.MAP_SINGLE_SECONDS + 0.01)
+			T.eq(run.state, "fight", "the forced first node starts a fight")
 			T.check(Run.requestJoin(run, 2, "guard", 1).ok, "join request accepted")
 			T.eq(run.members[2].status, "waiting", "waits during the fight")
 			T.check(run.encounter.players[2] == nil, "not in the running fight")
@@ -160,6 +190,17 @@ return {
 			T.check(#run.members[2].components == 2, "catch-up: starter + one kit component after one fight")
 			Run.pick(run, 1, 2)
 			Run.tick(run, 4)
+			T.eq(run.state, "map", "path vote opens after the draft")
+			T.check(#run.choices >= 2, "a real fork: " .. #run.choices)
+			local fightId
+			for _, id in run.choices do
+				local k = run.map.byId[id].kind
+				if k == "fight" or k == "elite" then
+					fightId = id
+				end
+			end
+			T.check(Run.vote(run, 1, fightId).ok and Run.vote(run, 2, fightId).ok, "both vote")
+			Run.tick(run, 5)
 			T.eq(run.state, "fight", "next fight starts")
 			T.check(run.encounter.players[2] ~= nil, "newcomer fights")
 			local Draft = T.Loader.server("Run.Draft")
@@ -171,6 +212,7 @@ return {
 		run = function(T)
 			local Run = T.Loader.server("Run.RunCore")
 			local run = Run.new({ id = "r", seed = "s", hostUid = 1, now = 0, modifiers = {}, familyPool = {}, privacy = "open", mode = "normal", maxParty = 2, firstIntro = false }, { { uid = 1, kit = "relay" } })
+			Run.tick(run, Run.MAP_SINGLE_SECONDS + 0.01)
 			run.encounter.hp = 0
 			run.encounter.phase = "won"
 			Run.tick(run, 1)
@@ -187,7 +229,7 @@ return {
 			Run.tick(run, 1 + Run.RESULT_BEAT + 20.1)
 			T.eq(run.members[1].lastPick, "fallback", "deadline applies the free fallback")
 			T.check(run.members[1].hull >= hullBefore, "fallback repairs")
-			T.eq(run.state, "fight", "next fight")
+			T.eq(run.state, "map", "path vote next")
 		end,
 	},
 	{
@@ -195,6 +237,7 @@ return {
 		run = function(T)
 			local Run = T.Loader.server("Run.RunCore")
 			local run = Run.new({ id = "r", seed = "s", hostUid = 1, now = 0, modifiers = {}, familyPool = {}, privacy = "open", mode = "normal", maxParty = 2, firstIntro = false }, { { uid = 1, kit = "relay" }, { uid = 2, kit = "guard" } })
+			Run.tick(run, Run.MAP_SINGLE_SECONDS + 0.01)
 			local enc = run.encounter
 			local before = enc.maxHp
 			Run.leave(run, 2, 5, true)

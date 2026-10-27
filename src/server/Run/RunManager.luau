@@ -15,6 +15,7 @@ local Protocol = require(Shared.Net.Protocol)
 local Kits = require(Shared.Content.Kits)
 local Modifiers = require(Shared.Content.Modifiers)
 local Cosmetics = require(Shared.Content.Cosmetics)
+local Campaigns = require(Shared.Content.Campaigns)
 local Aim = require(Shared.Sim.Aim)
 
 local RunCore = require(script.Parent.RunCore)
@@ -23,6 +24,8 @@ local RateLimit = require(script.Parent.Parent.Validation.RateLimit)
 local Schema = require(script.Parent.Parent.Persistence.Schema)
 local ProfileStore = require(script.Parent.Parent.Persistence.ProfileStore)
 local Funnels = require(script.Parent.Parent.Analytics.Funnels)
+local PartyCore = require(script.Parent.Parent.Lobby.PartyCore)
+local Heroes = require(script.Parent.Parent.World.Heroes)
 
 type Run = RunCore.Run
 
@@ -60,6 +63,7 @@ local lastSnapshotAt: { [string]: number } = {}
 local dirty: { [string]: boolean } = {}
 local testLog: { { [string]: any } } = {}
 local backendLabel = "none"
+local lobby = PartyCore.new(Config.Party.MAX_PARTY)
 
 local function now(): number
 	return workspace:GetServerTimeNow()
@@ -131,6 +135,8 @@ local function lobbyList(forUid: number): { any }
 				privacy = run.privacy,
 				state = run.state,
 				index = run.index,
+				act = run.act,
+				campaign = run.campaign,
 				waitLow = lo,
 				waitHigh = hi,
 			})
@@ -139,10 +145,19 @@ local function lobbyList(forUid: number): { any }
 	return list
 end
 
+local function lobbyPayload(uid: number): { [string]: any }
+	local mine = PartyCore.partyOf(lobby, uid)
+	return {
+		runs = lobbyList(uid),
+		parties = PartyCore.list(lobby, uid),
+		party = if mine then PartyCore.view(mine) else nil,
+	}
+end
+
 local function broadcastLobby()
 	for uid, info in infos do
 		if info.runId == nil then
-			push(info.player, "lobby", lobbyList(uid))
+			push(info.player, "lobby", lobbyPayload(uid))
 		end
 	end
 end
@@ -192,10 +207,14 @@ local function updateProfileFromRunEvent(run: Run, ev: { [string]: any })
 							table.insert(mods, id)
 						end
 					end
+					local nextAct = if ev.boss then (ev.act or 1) + 1 else (ev.act or 1)
 					p.checkpoint = {
 						runSeed = run.seed,
 						kit = m.kit,
 						completed = ev.index,
+						campaign = run.campaign,
+						act = nextAct,
+						atNode = if ev.boss then nil else ev.nodeId,
 						rack = table.clone(m.rack),
 						components = table.clone(m.components),
 						ballLevels = table.clone(m.ballLevels),
@@ -372,7 +391,8 @@ local function startRunFor(founders: { RunCore.Founder }, opts: {
 	privacy: "open" | "friends" | "closed",
 	mode: "normal" | "test",
 	condition: RunCore.TestCondition?,
-	startIndex: number?,
+	campaign: string?,
+	resume: RunCore.Resume?,
 	seed: string?,
 }): Run
 	local id = newRunId()
@@ -390,7 +410,8 @@ local function startRunFor(founders: { RunCore.Founder }, opts: {
 		condition = opts.condition,
 		maxParty = if opts.mode == "test" then Config.Party.MAX_PARTY_TESTING else Config.Party.MAX_PARTY,
 		firstIntro = firstIntro,
-		startIndex = opts.startIndex,
+		campaign = opts.campaign,
+		resume = opts.resume,
 	}, founders)
 	runs[id] = run
 	for _, f in founders do
@@ -399,6 +420,7 @@ local function startRunFor(founders: { RunCore.Founder }, opts: {
 			info.runId = id
 			info.firstRunDone = true
 		end
+		PartyCore.leave(lobby, f.uid)
 		local p = profileOf(f.uid)
 		if p then
 			p.stats.runsStarted += 1
@@ -486,19 +508,9 @@ handlers.ready = function(info, msg)
 		info.ready = true
 		funnels:mark(info.uid, "ready_to_act", now())
 	end
-	-- New players start equipped at the board: no lobby walk, no menu.
-	local p = profileOf(info.uid)
-	local returning = p ~= nil and p.stats.runsStarted > 0
-	if info.runId == nil and not returning then
-		startRunFor({ { uid = info.uid, kit = "ricochet" } }, {
-			modifiers = {},
-			familyPool = if p then p.familyPool else {},
-			privacy = "friends",
-			mode = "normal",
-		})
-	else
-		push(info.player, "lobby", lobbyList(info.uid))
-	end
+	-- Everyone lands in the lobby hall. New players see one large
+	-- "Begin" action (solo, first campaign) so the first launch stays close.
+	push(info.player, "lobby", lobbyPayload(info.uid))
 end
 
 handlers.startRun = function(info, msg)
@@ -515,7 +527,9 @@ handlers.startRun = function(info, msg)
 	if p then
 		p.familyPool = families
 	end
+	PartyCore.leave(lobby, info.uid)
 	startRunFor({ { uid = info.uid, kit = kit } }, {
+		campaign = if Campaigns.ById[msg.campaign] then msg.campaign else Campaigns.DEFAULT,
 		modifiers = sanitizeModifiers(msg.modifiers),
 		familyPool = families,
 		privacy = privacy,
@@ -529,7 +543,13 @@ handlers.continueRun = function(info, _msg)
 	end
 	local p = profileOf(info.uid)
 	local cp = if p then p.checkpoint else nil
-	if p == nil or cp == nil or cp.completed >= 9 then
+	if p == nil or cp == nil then
+		push(info.player, "notice", { text = "No run to continue." })
+		return
+	end
+	local campaignId = if cp.campaign and Campaigns.ById[cp.campaign] then cp.campaign else Campaigns.DEFAULT
+	local actCount = #Campaigns.ById[campaignId].acts
+	if (cp.act or 1) > actCount then
 		push(info.player, "notice", { text = "No run to continue." })
 		return
 	end
@@ -543,7 +563,8 @@ handlers.continueRun = function(info, _msg)
 		familyPool = p.familyPool,
 		privacy = "friends",
 		mode = "normal",
-		startIndex = cp.completed + 1,
+		campaign = campaignId,
+		resume = { act = cp.act or 1, atNode = cp.atNode, index = cp.completed },
 		seed = cp.runSeed,
 	})
 end
@@ -660,6 +681,7 @@ handlers.rematch = function(info, _msg)
 		return
 	end
 	startRunFor(founders, {
+		campaign = run.campaign,
 		modifiers = run.modifiers,
 		familyPool = run.familyPool,
 		privacy = run.privacy,
@@ -670,8 +692,128 @@ end
 
 handlers.leaveRun = function(info, _msg)
 	leaveCurrentRun(info, false)
-	push(info.player, "lobby", lobbyList(info.uid))
+	push(info.player, "lobby", lobbyPayload(info.uid))
 	sendProfile(info)
+end
+
+-- Lobby parties ----------------------------------------------------------------
+
+local function cleanKit(k: any): string
+	return if type(k) == "string" and Kits.ById[k] then k else "ricochet"
+end
+
+local function cleanCampaign(c: any): string
+	return if type(c) == "string" and Campaigns.ById[c] then c else Campaigns.DEFAULT
+end
+
+local function cleanPrivacy(p: any): "open" | "friends" | "closed"
+	return if p == "open" or p == "friends" or p == "closed" then p else "friends"
+end
+
+handlers.createParty = function(info, msg)
+	if info.runId then
+		return
+	end
+	PartyCore.create(lobby, info.uid, cleanKit(msg.kit), cleanCampaign(msg.campaign), cleanPrivacy(msg.privacy))
+	broadcastLobby()
+end
+
+handlers.joinParty = function(info, msg)
+	if info.runId then
+		return
+	end
+	local party = lobby.parties[msg.partyId]
+	if party and party.privacy == "friends" then
+		local ok, isFriend = pcall(function()
+			return info.player:IsFriendsWithAsync(party.leader)
+		end)
+		if not (ok and isFriend) then
+			push(info.player, "notice", { text = "That party is friends-only." })
+			return
+		end
+	end
+	local res = PartyCore.join(lobby, info.uid, msg.partyId, cleanKit(msg.kit))
+	if not res.ok then
+		push(info.player, "notice", { text = if res.reason == "full" then "That party is full." else "Can't join that party." })
+	end
+	broadcastLobby()
+end
+
+handlers.leaveParty = function(info, _msg)
+	PartyCore.leave(lobby, info.uid)
+	broadcastLobby()
+end
+
+handlers.partyKit = function(info, msg)
+	PartyCore.setKit(lobby, info.uid, cleanKit(msg.kit))
+	broadcastLobby()
+end
+
+handlers.partyReady = function(info, msg)
+	PartyCore.setReady(lobby, info.uid, msg.ready == true)
+	broadcastLobby()
+end
+
+handlers.partyCampaign = function(info, msg)
+	PartyCore.setCampaign(lobby, info.uid, cleanCampaign(msg.campaign))
+	broadcastLobby()
+end
+
+handlers.startParty = function(info, msg)
+	if info.runId then
+		return
+	end
+	local res = PartyCore.canStart(lobby, info.uid)
+	if not res.ok then
+		push(info.player, "notice", { text = if res.reason == "not_ready" then "Waiting for everyone to be ready." else "Only the party leader can start." })
+		return
+	end
+	local party = PartyCore.partyOf(lobby, info.uid) :: PartyCore.Party
+	local campaign = party.campaign
+	local privacy: "open" | "friends" | "closed" = party.privacy
+	local founders: { RunCore.Founder } = {}
+	for _, f in PartyCore.dissolve(lobby, party.id) do
+		local fi = infos[f.uid]
+		if fi and fi.runId == nil then
+			table.insert(founders, { uid = f.uid, kit = f.kit })
+		end
+	end
+	if #founders == 0 then
+		return
+	end
+	local p = profileOf(info.uid)
+	startRunFor(founders, {
+		campaign = campaign,
+		modifiers = sanitizeModifiers(msg.modifiers),
+		familyPool = if p then p.familyPool else {},
+		privacy = privacy,
+		mode = "normal",
+	})
+end
+
+handlers.vote = function(info, msg)
+	local run = if info.runId then runs[info.runId] else nil
+	if run == nil then
+		return
+	end
+	RunCore.vote(run, info.uid, msg.nodeId)
+	processRunEvents(run)
+	dirty[run.id] = true
+	sendSnapshots(run, true)
+end
+
+handlers.rest = function(info, msg)
+	local run = if info.runId then runs[info.runId] else nil
+	if run == nil then
+		return
+	end
+	local res = RunCore.chooseRest(run, info.uid, msg.choice, msg.slot)
+	if not res.ok then
+		push(info.player, "notice", { text = "That choice isn't available.", reason = res.reason })
+	end
+	processRunEvents(run)
+	dirty[run.id] = true
+	sendSnapshots(run, true)
 end
 
 handlers.joinRun = function(info, msg)
@@ -857,6 +999,7 @@ local function onPlayerAdded(player: Player)
 		pending = {},
 	}
 	infos[uid] = info
+	Heroes.ensure(player)
 	-- Join is recorded at once so early exits stay in the denominator; the
 	-- prior-exposure field is filled from the profile when it loads.
 	funnels:start(uid, now(), "normal", false, "unknown")
@@ -902,6 +1045,8 @@ local function onPlayerRemoving(player: Player)
 	if info then
 		leaveCurrentRun(info, true)
 	end
+	PartyCore.leave(lobby, uid)
+	Heroes.forget(uid)
 	infos[uid] = nil
 	RateLimit.forget(limiter, uid)
 	RateLimit.forget(aimLimiter, uid)

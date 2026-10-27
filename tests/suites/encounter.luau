@@ -101,9 +101,18 @@ return {
 			local half = res.shot.startAt + (res.shot.endAt - res.shot.startAt) / 2
 			E.tick(enc, half)
 			local mid = enc.hp
-			T.check(mid < 5000 and mid > 5000 - res.shot.damage or res.shot.damage == 0, "partial damage mid-flight")
+			T.eq(mid, 5000, "damage is banked on the hero during flight")
 			E.tick(enc, res.shot.endAt + 0.01)
-			T.eq(enc.hp, 5000 - res.shot.damage, "full damage after the ball drains")
+			T.eq(enc.hp, 5000, "no damage until the hero strikes")
+			local strikeAt = res.shot.endAt + T.Loader.shared("Config").Combat.STRIKE_DELAY
+			E.tick(enc, strikeAt + 0.01)
+			T.eq(enc.hp, 5000 - res.shot.damage, "the strike deals the whole shot")
+			local strikes = eventsOf(enc, E, "strike")
+			T.eq(#strikes, if res.shot.damage > 0 then 1 else 0, "one strike event per damaging shot")
+			if #strikes == 1 then
+				T.eq(strikes[1].damage, res.shot.damage, "strike carries the shot total")
+				T.eq(enc.players[1].damage, res.shot.damage, "contribution credited to the shooter")
+			end
 		end,
 	},
 	{
@@ -243,7 +252,7 @@ return {
 			local enc, E = newEnc(T, { seed(1) }, { enemy = "boss_crusher", hp = 100 })
 			enc.armor = 5
 			local shot = E.launch(enc, 1, { seq = 1, slot = 1, aim = 0, boardRev = enc.boardRev }, 1)
-			E.tick(enc, shot.shot.endAt + 0.01)
+			E.tick(enc, shot.shot.endAt + 1)
 			local dealt = math.min(shot.shot.damage, 105)
 			T.check(enc.armor == 0 or shot.shot.damage < 5, "armor used up first")
 			local phases = eventsOf(enc, E, "bossPhase")

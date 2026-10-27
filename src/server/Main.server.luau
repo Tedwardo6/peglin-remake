@@ -6,6 +6,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local RunManager = require(script.Parent.Run.RunManager)
+local MonsterAssets = require(script.Parent.World.MonsterAssets)
 
 print(`[{Config.GAME_NAME}] server started (Rojo sync OK)`)
+MonsterAssets.start()
 RunManager.start()

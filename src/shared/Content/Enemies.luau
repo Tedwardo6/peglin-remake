@@ -1,7 +1,8 @@
 --!strict
 -- Monsters and their telegraphed threats. Every threat is announced with a
 -- countdown (≥ 12 s) and a plain description of what it will do.
--- Six ordinary behaviours and three bosses. HP values are solo HP; the
+-- Six ordinary behaviours and three bosses (names are placeholders). HP
+-- values are solo HP; the
 -- encounter scales them by party size (Config.Combat.HP_SCALE_PER_EXTRA).
 
 export type ThreatKind = "slam" | "double" | "jam" | "grow" | "armor" | "pierce"
@@ -19,12 +20,10 @@ export type ThreatDef = {
 }
 
 export type Look = {
-	body: Color3,
-	belly: Color3,
-	horn: "none" | "horns" | "antenna" | "spikes" | "crown" | "shell",
-	eyes: number,
-	scale: number,
-	mouth: "grin" | "fangs" | "flat",
+	model: string, -- key in Content/MonsterModels
+	height: number, -- standing height on the battlefield, in studs
+	glow: Color3, -- psychedelic rim/aura colour
+	float: boolean?, -- hovers instead of standing
 }
 
 export type Phase = { at: number, cycle: { ThreatDef }, cadence: number, label: string }
@@ -68,84 +67,84 @@ end
 local LIST: { EnemyDef } = {
 	{
 		id = "brute_intro",
-		name = "Small Monster",
+		name = "Mire Imp",
 		hp = 100,
 		boss = false,
 		cadence = 20,
 		firstDelay = 24,
 		cycle = { slam(5) },
-		look = { body = c(120, 214, 110), belly = c(220, 255, 190), horn = "antenna", eyes = 2, scale = 0.85, mouth = "grin" },
+		look = { model = "imp", height = 4.2, glow = c(90, 200, 255) },
 		blurb = "Slow and forgiving. Slams every 20 s.",
 	},
 	{
 		id = "brute",
-		name = "Brute Monster",
+		name = "Gloom Brute",
 		hp = 360,
 		boss = false,
 		cadence = 18,
 		firstDelay = 18,
 		cycle = { slam(8) },
-		look = { body = c(240, 120, 70), belly = c(255, 214, 170), horn = "horns", eyes = 2, scale = 1.0, mouth = "fangs" },
+		look = { model = "brute", height = 6.6, glow = c(170, 90, 255) },
 		blurb = "Big single slams.",
 	},
 	{
 		id = "twin",
-		name = "Twin-Strike Monster",
+		name = "Twinfang Hound",
 		hp = 360,
 		boss = false,
 		cadence = 18,
 		firstDelay = 18,
 		cycle = { double(5) },
-		look = { body = c(90, 200, 230), belly = c(210, 245, 255), horn = "antenna", eyes = 3, scale = 0.95, mouth = "grin" },
+		look = { model = "hound", height = 5.4, glow = c(80, 160, 255) },
 		blurb = "Strikes twice in a row.",
 	},
 	{
 		id = "jammer",
-		name = "Jammer Monster",
+		name = "Hex Weaver",
 		hp = 440,
 		boss = false,
 		cadence = 18,
 		firstDelay = 18,
 		cycle = { jam(5), slam(9) },
-		look = { body = c(200, 110, 230), belly = c(240, 210, 255), horn = "spikes", eyes = 1, scale = 1.0, mouth = "flat" },
+		look = { model = "hex", height = 7.0, glow = c(120, 110, 255), float = true },
 		blurb = "Jams your special balls for a shot, then slams.",
 	},
 	{
 		id = "grower",
-		name = "Growing Monster",
+		name = "Spore Colossus",
 		hp = 540,
 		boss = false,
 		cadence = 17,
 		firstDelay = 17,
 		cycle = { grow(5, 2) },
-		look = { body = c(250, 200, 60), belly = c(255, 245, 200), horn = "horns", eyes = 2, scale = 1.05, mouth = "fangs" },
+		look = { model = "fungal", height = 7.6, glow = c(255, 90, 220) },
 		blurb = "Every slam hits 2 harder than the last.",
 	},
 	{
 		id = "shell",
-		name = "Shell Monster",
+		name = "Carapace Golem",
 		hp = 480,
 		boss = false,
 		cadence = 18,
 		firstDelay = 18,
 		cycle = { armor(18), slam(10) },
-		look = { body = c(110, 140, 190), belly = c(200, 215, 240), horn = "shell", eyes = 2, scale = 1.05, mouth = "flat" },
+		look = { model = "golem", height = 7.2, glow = c(90, 200, 255) },
 		blurb = "Grows armor that soaks damage, then slams.",
 	},
 	{
 		id = "piercer",
-		name = "Piercer Monster",
+		name = "Thorn Wraith",
 		hp = 580,
 		boss = false,
 		cadence = 17,
 		firstDelay = 17,
 		cycle = { pierce(11) },
-		look = { body = c(230, 70, 110), belly = c(255, 200, 215), horn = "spikes", eyes = 2, scale = 1.0, mouth = "fangs" },
+		look = { model = "wraith", height = 7.4, glow = c(255, 70, 200), float = true },
 		blurb = "Half of each hit ignores shield.",
 	},
 	{
 		id = "boss_crusher",
-		name = "Crusher Boss",
+		name = "The Drowned King",
 		hp = 880,
 		boss = true,
 		cadence = 18,
@@ -154,12 +153,12 @@ local LIST: { EnemyDef } = {
 		phases = {
 			{ at = 0.5, cycle = { slam(11), double(7) }, cadence = 16, label = "Enraged: faster threats" },
 		},
-		look = { body = c(255, 110, 60), belly = c(255, 220, 160), horn = "crown", eyes = 2, scale = 1.35, mouth = "fangs" },
+		look = { model = "king", height = 12.5, glow = c(70, 140, 255) },
 		blurb = "Alternates slams and double strikes. Speeds up at half health.",
 	},
 	{
 		id = "boss_warden",
-		name = "Warden Boss",
+		name = "The Eye Warden",
 		hp = 1100,
 		boss = true,
 		cadence = 18,
@@ -168,12 +167,12 @@ local LIST: { EnemyDef } = {
 		phases = {
 			{ at = 0.4, cycle = { pierce(12), slam(13) }, cadence = 17, label = "Armor broken: piercing attacks" },
 		},
-		look = { body = c(80, 120, 200), belly = c(190, 210, 255), horn = "shell", eyes = 3, scale = 1.4, mouth = "flat" },
+		look = { model = "eyetree", height = 10.5, glow = c(255, 130, 60) },
 		blurb = "Armors up, then breaks through shields.",
 	},
 	{
 		id = "boss_overseer",
-		name = "Overseer Boss",
+		name = "The Vortex Eye",
 		hp = 1300,
 		boss = true,
 		cadence = 17,
@@ -182,7 +181,7 @@ local LIST: { EnemyDef } = {
 		phases = {
 			{ at = 0.5, cycle = { armor(40), pierce(13), grow(12, 3) }, cadence = 16, label = "Final form: armor and pierce" },
 		},
-		look = { body = c(150, 70, 220), belly = c(230, 200, 255), horn = "crown", eyes = 1, scale = 1.5, mouth = "fangs" },
+		look = { model = "overseer", height = 12.5, glow = c(120, 200, 255), float = true },
 		blurb = "Everything at once. Gains armor at half health.",
 	},
 }
