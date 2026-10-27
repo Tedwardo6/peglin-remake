@@ -2,8 +2,8 @@
 
 ## Current state
 
-- **Stage:** RPG redesign (first pass) on branch `feature/rpg-redesign`, built on top of `feature/full-loop` (draft PR #1). Neither is merged. Not published.
-- **Setup:** Rokit and Rojo 7.7.1 on Theodore's Mac; repo at `~/Documents/SeawindStudios/peglin-remake`. **That folder is now checked out on `feature/rpg-redesign`**, so Studio (with `rojo serve` running) shows the redesign.
+- **Stage:** Full loop (PR #1) and the RPG redesign first pass (PR #2) **merged into `main` on October 27, 2026 at Theodore's request.** Not published.
+- **Setup:** Rokit and Rojo 7.7.1 on Theodore's Mac; repo at `~/Documents/SeawindStudios/peglin-remake`. That folder is checked out on `main` after the merge, so Studio (with `rojo serve` running) shows the merged game.
 - **Design authority:** `ideas/co-op-pegboard-adventure/research/2026-10-27-merged-multiplayer-proposal.md` in seawind-ideas at `54167c6`, plus Theodore's redesign direction of October 27, 2026 (Peglin-style hero strikes, path map, lobby with parties and campaigns, dark fantasy + psychedelic art, 10× better monsters that animate cleanly, then a UI restyle to his iron/stone references).
 - **Next objective:** Theodore plays a full act in Studio and a 2-player test.
 
@@ -19,15 +19,15 @@ Record real IDs only after verifying them in Studio or Creator Hub.
 
 | Who | Assistant | Task | Branch | Started |
 |---|---|---|---|---|
-| Theodore | Claude (cloud session) | RPG redesign, first pass | `feature/rpg-redesign` | Oct 27, 2026 |
+| — | — | No active work (RPG redesign merged Oct 27, 2026) | — | — |
 
 ## Last handoff (October 27, 2026)
 
-**Repo, branch, commit:** `Tedwardo6/peglin-remake`, `feature/rpg-redesign` (the commit that adds this handoff; code at `0f2c7d0`). Branched from `feature/full-loop` at `f9d9a41`. `main` is at `a0ee5f2` and has not moved.
+**Repo, branch, commit:** `Tedwardo6/peglin-remake`, `main` after merging PR #1 (`feature/full-loop`) and PR #2 (`feature/rpg-redesign`, last code commit `ae44d79`). `main` was at `a0ee5f2` before the merges.
 
-**Sync state:** Theodore's folder was switched to `feature/rpg-redesign` and fast-forwarded to `0f2c7d0` by the agent (through a git bundle written into the folder; nothing else in the folder was touched). Rojo synced it into Studio.
+**Sync state:** the agent switched Theodore's folder to `main` and pulled the merge. Rojo synced it into Studio.
 
-**Studio place edits (unsaved, Theodore decides):** the agent's mesh generations left source models in the Edit place: a `workspace.MonsterStage` folder (the generated monster sources) and nothing else. They are not needed at runtime (the game rebuilds monsters from `Content/MonsterModels`). Either delete `MonsterStage` or move it to `ServerStorage` and save the place. The agent did not save the place.
+**Studio place:** the agent's mesh generations left the generated monster sources in the place. At Theodore's request ("save everything") they were kept, moved out of the visible world into `ServerStorage.MonsterStage` (not needed at runtime: the game rebuilds monsters from `Content/MonsterModels`), and the place was saved.
 
 ### What changed
 
