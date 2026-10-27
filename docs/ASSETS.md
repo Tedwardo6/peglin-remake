@@ -76,6 +76,23 @@ end
 
 Each piece rotates about a joint: the middle of where its box overlaps the core's box (the seam the generator already hides), with arms hinged near the top of that overlap. Rotating about these joints keeps limbs attached in every pose. Held items ride the gripping hand but stay mostly upright, then thrust forward on the slam. Floaters rise on the wind-up and dive on the slam; tentacles flare out. Seated monsters lean less so they stay on the throne. All motion is eased (no snapping), and reduced motion turns off idle sway.
 
+## UI frame art
+
+Our own images, drawn procedurally by `tools/make_ui_art.py` (height maps lit from the top-left, no source images) into `art/ui/`. Style follows Theodore's October 27 reference screenshots (iron/stone frames with gems, stone-housed bars, round portrait ring, inventory slots); nothing was traced or copied from them. **Reuse status:** ours.
+
+| File | Use | 9-slice centre (source px) |
+|---|---|---|
+| `frame_iron.png` | default panels, button frames | 60, 60, 196, 196 |
+| `frame_ornate.png` | modals, lobby and map panels | 80, 80, 176, 176 |
+| `plaque.png` | headings | 150, 12, 874, 116 |
+| `ring.png`, `disc.png` | portrait seals, round icons | — |
+| `slot.png`, `glow.png` | inset cards and slots, rarity/selection glow | 24, 24, 104, 104 / 32, 32, 96, 96 |
+| `trough.png` | stone housing around every bar | 40, 30, 984, 66 |
+| `fill_red.png`, `fill_blue.png`, `fill_white.png` | tiled bar liquids (white is tinted) | tiled |
+| `grain.png`, `vignette.png` | interior texture and inner shadow | tiled / 48, 48, 80, 80 |
+
+**Uploading:** Studio's image upload only accepts files served from the Mac itself (`http://localhost`). Run `python3 -m http.server 8777` inside `art/ui`, upload through Studio, then paste the returned ids into `src/client/UI/Skin.luau`. Regenerate after changing the script, and keep the slice numbers in `Skin.luau` in step with the generator.
+
 ## Heroes
 
 Each player's hero is their own Roblox avatar, built on the server with `Players:CreateHumanoidModelFromDescription` and animated with the avatar's own animation set (idle, tool slash/lunge, point, cheer, wave). Class gear (cape, hood, Warden helm and pauldrons, Mystic hat and staff, daggers, shield) is built from parts in `src/client/World/Hero.luau`. Avatar items belong to their creators and are shown the way Roblox shows any avatar.
