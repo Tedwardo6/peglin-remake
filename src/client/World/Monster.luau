@@ -198,7 +198,7 @@ function Monster.new(parent: Instance, enemyId: string, base: Vector3): Monster
 		local pl = Instance.new("PointLight")
 		pl.Color = look.glow
 		pl.Brightness = 1.2
-		pl.Range = math.max(10, look.height * 1.6)
+		pl.Range = math.max(12, look.height * 2.2)
 		pl.Parent = host
 		self.light = pl
 		if look.sparkle then
@@ -520,11 +520,11 @@ function Monster._step(self: Monster, dt: number)
 		local threatCol = Color3.fromRGB(255, 110, 40)
 		local pulse = 0.5 + 0.5 * math.sin(t * (if self.urgent then 14 else 2))
 		hl.FillColor = self.glow:Lerp(threatCol, tele)
-		hl.FillTransparency = 0.9 - tele * 0.25 * pulse
+		hl.FillTransparency = 0.85 - tele * 0.25 * pulse
 		hl.OutlineColor = self.glow:Lerp(threatCol, tele):Lerp(Color3.fromRGB(255, 120, 230), (0.5 + 0.5 * math.sin(t * 0.8)) * 0.4)
 	end
 	if self.light then
-		(self.light :: PointLight).Brightness = 1 + tele * 1.5
+		(self.light :: PointLight).Brightness = 1.8 + tele * 1.5
 	end
 	if self.aura then
 		(self.aura :: ParticleEmitter).Rate = if self.hidden then 0 else 8 + tele * 30

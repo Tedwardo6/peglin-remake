@@ -84,10 +84,10 @@ local function optionText(o: DraftOption, _rack: { string }): (string, string, s
 		return c.name, c.description, c.icon, C.panelLight
 	elseif o.kind == "ball" then
 		local b = Balls.ById[o.id]
-		return b.name, b.description, "●", b.color
+		return b.name, b.description, "🔮", b.color
 	else
 		local b = Balls.ById[o.id]
-		return "Upgrade " .. b.name, `+1 damage per hit for your {b.name}.`, "▲", b.color
+		return "Upgrade " .. b.name, `+1 damage per hit for your {b.name}.`, "⬆️", b.color
 	end
 end
 
@@ -96,7 +96,7 @@ export type Draft = { modal: Modal, setDeadline: (deadline: number, now: number)
 function Screens.draft(offer: { DraftOption }, rack: { string }, rerolls: number, fallback: number, title: string, onPick: (choice: number, slot: number?) -> (), onReroll: () -> ()): Draft
 	local m = modal("Draft", UDim2.fromOffset(820, 470))
 	local p = m.panel
-	Kit.label({ Text = "PICK AN UPGRADE", TextSize = 38, Bold = true, Size = UDim2.new(1, 0, 0, 44), Position = UDim2.fromOffset(0, 12), ZIndex = 22, Parent = p })
+	Kit.label({ Text = "CLAIM A RELIC", Title = true, Bold = true, TextSize = 44, TextColor3 = C.gold, Size = UDim2.new(1, 0, 0, 46), Position = UDim2.fromOffset(0, 10), ZIndex = 22, Parent = p })
 	Kit.label({ Text = title, TextSize = 18, TextColor3 = C.textDim, Size = UDim2.new(1, 0, 0, 24), Position = UDim2.fromOffset(0, 54), ZIndex = 22, Parent = p })
 	local cardsHolder = Kit.new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, -40, 0, 290), Position = UDim2.fromOffset(20, 100), ZIndex = 22, Parent = p })
 	local timerBar = Kit.bar({ Size = UDim2.new(1, -260, 0, 22), Position = UDim2.new(0, 20, 1, -42), Color = C.gold, TextSize = 14, ZIndex = 22, Parent = p })
@@ -106,7 +106,7 @@ function Screens.draft(offer: { DraftOption }, rack: { string }, rerolls: number
 	local reroll: Kit.Button
 	local function askSlot(choice: number)
 		local sm = modal("Slot", UDim2.fromOffset(520, 250))
-		Kit.label({ Text = "REPLACE WHICH BALL?", TextSize = 30, Bold = true, Size = UDim2.new(1, 0, 0, 40), Position = UDim2.fromOffset(0, 16), ZIndex = 22, Parent = sm.panel })
+		Kit.label({ Text = "REPLACE WHICH BALL?", Title = true, TextSize = 34, Bold = true, TextColor3 = C.gold, Size = UDim2.new(1, 0, 0, 40), Position = UDim2.fromOffset(0, 16), ZIndex = 22, Parent = sm.panel })
 		for i = 2, #rack do
 			local b = Balls.ById[rack[i]]
 			Kit.button({
@@ -147,7 +147,7 @@ function Screens.draft(offer: { DraftOption }, rack: { string }, rerolls: number
 				Size = UDim2.new(1, -24, 0, 54),
 				Position = UDim2.new(0.5, 0, 1, -12),
 				AnchorPoint = Vector2.new(0.5, 1),
-				Face = C.green,
+				Face = C.ember,
 				TextSize = 22,
 				ZIndex = 24,
 				Sound = "reward",
@@ -183,7 +183,7 @@ function Screens.draft(offer: { DraftOption }, rack: { string }, rerolls: number
 	reroll.setEnabled(rerolls > 0)
 
 	local deadlineAt = 0
-	local fallbackText = `If time runs out: repair {fallback} hull`
+	local fallbackText = `If time runs out: heal {fallback}`
 	local running = true
 	task.spawn(function()
 		while running do
@@ -371,7 +371,7 @@ export type SettingsState = { reducedMotion: boolean, music: number, sfx: number
 
 function Screens.settings(state: SettingsState, onChange: (SettingsState) -> (), onLeaveRun: (() -> ())?): Modal
 	local m = modal("Settings", UDim2.fromOffset(520, 420))
-	Kit.label({ Text = "SETTINGS", TextSize = 36, Bold = true, Size = UDim2.new(1, 0, 0, 44), Position = UDim2.fromOffset(0, 14), ZIndex = 22, Parent = m.panel })
+	Kit.label({ Text = "SETTINGS", Title = true, TextSize = 36, Bold = true, TextColor3 = C.gold, Size = UDim2.new(1, 0, 0, 44), Position = UDim2.fromOffset(0, 14), ZIndex = 22, Parent = m.panel })
 	local function toggleRow(y: number, text: string, get: () -> boolean, set: (boolean) -> ())
 		Kit.label({ Text = text, TextSize = 22, Size = UDim2.new(0.6, 0, 0, 30), Position = UDim2.new(0.06, 0, 0, y + 10), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 22, Parent = m.panel })
 		local b: Kit.Button
@@ -456,7 +456,7 @@ end
 
 function Screens.pegKey(): Modal
 	local m = modal("PegKey", UDim2.fromOffset(700, 470))
-	Kit.label({ Text = "PEG KEY", TextSize = 34, Bold = true, Size = UDim2.new(1, 0, 0, 42), Position = UDim2.fromOffset(0, 12), ZIndex = 22, Parent = m.panel })
+	Kit.label({ Text = "PEG KEY", Title = true, TextSize = 34, Bold = true, TextColor3 = C.gold, Size = UDim2.new(1, 0, 0, 42), Position = UDim2.fromOffset(0, 12), ZIndex = 22, Parent = m.panel })
 	for i, kindName in Pegs.Order do
 		local kind: Pegs.PegKind = kindName :: any
 		local def = Pegs.Defs[kind]
@@ -533,7 +533,7 @@ local idle: Modal? = nil
 function Screens.idleWarning(show: boolean)
 	if show and idle == nil then
 		local m = modal("Idle", UDim2.fromOffset(460, 180), C.panelLight)
-		Kit.label({ Text = "STILL THERE?", TextSize = 36, Bold = true, Size = UDim2.new(1, 0, 0, 46), Position = UDim2.fromOffset(0, 24), ZIndex = 22, Parent = m.panel })
+		Kit.label({ Text = "STILL THERE?", Title = true, TextSize = 36, Bold = true, TextColor3 = C.gold, Size = UDim2.new(1, 0, 0, 46), Position = UDim2.fromOffset(0, 24), ZIndex = 22, Parent = m.panel })
 		Kit.label({ Text = "Aim or launch in 15 s to keep your seat in this fight.", TextSize = 18, Size = UDim2.new(1, -30, 0, 50), Position = UDim2.fromOffset(15, 80), TextWrapped = true, ZIndex = 22, Parent = m.panel })
 		m.backdrop.BackgroundTransparency = 0.6
 		idle = m
