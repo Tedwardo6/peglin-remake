@@ -1,0 +1,18 @@
+# Place files live in Studio / Team Create, not Git
+*.rbxl
+*.rbxlx
+*.rbxl.lock
+*.rbxlx.lock
+*.rbxm
+*.rbxmx
+
+# Tooling output
+sourcemap.json
+/build/
+
+# Machine-local settings
+workspace.local.json
+
+# OS / editor
+.DS_Store
+.vscode/settings.json
