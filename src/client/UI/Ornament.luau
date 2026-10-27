@@ -191,7 +191,7 @@ function Ornament.plaque(holder: Frame, h: number): Frame
 	-- Diamond caps behind the plate's ends, with gems.
 	for _, sx in { 0, 1 } do
 		local pos = UDim2.new(sx, if sx == 0 then cap else -cap, 0.5, 0)
-		ironBlock(holder, UDim2.fromOffset(math.floor(h * 0.74), math.floor(h * 0.74)), pos, Vector2.new(0.5, 0.5), 45, 0)
+		ironBlock(holder, UDim2.fromOffset(math.floor(h * 0.62), math.floor(h * 0.62)), pos, Vector2.new(0.5, 0.5), 45, 0)
 	end
 	-- Recessed dark face for the title.
 	local face = new("Frame", {
@@ -207,7 +207,7 @@ function Ornament.plaque(holder: Frame, h: number): Frame
 	new("UIGradient", { Color = ColorSequence.new(rgb(150, 140, 140), Color3.new(1, 1, 1)), Rotation = 90, Parent = face })
 	new("UIStroke", { Thickness = 1.5, Color = Ornament.IRON_HI, Transparency = 0.45, LineJoinMode = Enum.LineJoinMode.Miter, Parent = face })
 	for _, sx in { 0, 1 } do
-		Ornament.gem(holder, math.floor(h * 0.34), UDim2.new(sx, if sx == 0 then cap else -cap, 0.5, 0), Ornament.GEM, 0)
+		Ornament.gem(holder, math.floor(h * 0.28), UDim2.new(sx, if sx == 0 then cap else -cap, 0.5, 0), Ornament.GEM, 0)
 	end
 	return face
 end

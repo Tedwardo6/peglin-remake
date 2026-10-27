@@ -330,7 +330,7 @@ function Kit.button(props: ButtonProps): Button
 	})
 	Kit.new("UIGradient", {
 		Rotation = 90,
-		Color = ColorSequence.new(Color3.fromRGB(235, 225, 215), Color3.fromRGB(95, 85, 85)),
+		Color = ColorSequence.new(Color3.fromRGB(220, 208, 198), Color3.fromRGB(78, 68, 70)),
 		Parent = face,
 	})
 	-- An iron band around the button (no corner bosses at button size).

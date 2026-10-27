@@ -18,6 +18,7 @@ local Config = require(Shared.Config)
 
 local Theme = require(script.Parent.Theme)
 local Kit = require(script.Parent.Kit)
+local Ornament = require(script.Parent.Ornament)
 local Hud = require(script.Parent.Hud)
 
 local C = Theme.Color
@@ -108,8 +109,8 @@ function LobbyMenu.new(parent: Instance, cb: Callbacks): Menu
 	heading(camp, "CAMPAIGN", 8, 7)
 	local campName = Kit.label({ Text = "", Title = true, TextSize = 28, Size = UDim2.new(1, -24, 0, 32), Position = UDim2.fromOffset(12, 40), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 7, Parent = camp })
 	local campBlurb = Kit.label({ Text = "", TextSize = 14, TextColor3 = C.textDim, Size = UDim2.new(1, -24, 0, 54), Position = UDim2.fromOffset(12, 74), TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, ZIndex = 7, Parent = camp })
-	local actList = Kit.new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, -24, 0, 96), Position = UDim2.fromOffset(12, 130), ZIndex = 7, Parent = camp })
-	Kit.new("UIListLayout", { Padding = UDim.new(0, 4), Parent = actList })
+	local actList = Kit.new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, -24, 0, 100), Position = UDim2.fromOffset(12, 126), ZIndex = 7, Parent = camp })
+	Kit.new("UIListLayout", { Padding = UDim.new(0, 9), HorizontalAlignment = Enum.HorizontalAlignment.Center, Parent = actList })
 	local campRec = Kit.label({ Text = "", TextSize = 13, TextColor3 = C.cyan, Size = UDim2.new(1, -24, 0, 18), Position = UDim2.new(0, 12, 1, -26), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 7, Parent = camp })
 	local function refreshCampaign()
 		local c = Campaigns.ById[choices.campaign]
@@ -122,10 +123,10 @@ function LobbyMenu.new(parent: Instance, cb: Callbacks): Menu
 			end
 		end
 		for _, act in c.acts do
-			local row = Kit.new("Frame", { BackgroundColor3 = act.palette.deep:Lerp(act.palette.glow, 0.25), BackgroundTransparency = 0.2, Size = UDim2.new(1, 0, 0, 28), ZIndex = 7, Parent = actList })
-			Kit.corner(5).Parent = row
-			Kit.stroke(1, act.palette.glow, 0.3).Parent = row
-			Kit.label({ Text = `{act.subtitle} · {act.name}`, TextSize = 14, Size = UDim2.new(1, -16, 1, 0), Position = UDim2.fromOffset(8, 0), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 8, Parent = row })
+			local row = Kit.new("Frame", { BackgroundColor3 = Color3.fromRGB(30, 25, 28), BorderSizePixel = 0, Size = UDim2.new(1, -8, 0, 26), ZIndex = 7, Parent = actList })
+			Ornament.well(row)
+			Ornament.gem(row, 11, UDim2.new(0, 14, 0.5, 0), act.palette.glow, 1)
+			Kit.label({ Text = `{act.subtitle} · {act.name}`, TextSize = 14, Size = UDim2.new(1, -36, 1, 0), Position = UDim2.fromOffset(28, 0), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 8, Parent = row })
 		end
 	end
 	refreshCampaign()
@@ -147,9 +148,8 @@ function LobbyMenu.new(parent: Instance, cb: Callbacks): Menu
 		end
 		for i, bid in k.rack do
 			local b = Balls.ById[bid]
-			local chip = Kit.new("Frame", { BackgroundColor3 = C.panelLight, Size = UDim2.fromOffset(112, 26), Position = UDim2.fromOffset((i - 1) * 118, 0), ZIndex = 7, Parent = rackRow })
-			Kit.corner(13).Parent = chip
-			Kit.stroke(1, b.color, 0.2).Parent = chip
+			local chip = Kit.new("Frame", { BackgroundColor3 = Color3.fromRGB(30, 25, 28), BorderSizePixel = 0, Size = UDim2.fromOffset(108, 24), Position = UDim2.fromOffset((i - 1) * 118 + 2, 1), ZIndex = 7, Parent = rackRow })
+			Ornament.well(chip)
 			local sw = Kit.new("Frame", { Size = UDim2.fromOffset(16, 16), Position = UDim2.fromOffset(6, 5), BackgroundColor3 = b.color, ZIndex = 8, Parent = chip })
 			Kit.corner(8).Parent = sw
 			Kit.label({ Text = b.name, TextSize = 12, Size = UDim2.new(1, -28, 1, 0), Position = UDim2.fromOffset(26, 0), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 8, Parent = chip })
@@ -192,7 +192,7 @@ function LobbyMenu.new(parent: Instance, cb: Callbacks): Menu
 		ZIndex = 7,
 		Parent = partyPanel,
 	})
-	Kit.new("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder, Parent = partyBody })
+	Kit.new("UIListLayout", { Padding = UDim.new(0, 11), SortOrder = Enum.SortOrder.LayoutOrder, HorizontalAlignment = Enum.HorizontalAlignment.Center, Parent = partyBody })
 
 	-- Primary actions (bottom centre).
 	local actions = Kit.new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(560, 74), Position = UDim2.new(0, 362, 1, -16), AnchorPoint = Vector2.new(0, 1), ZIndex = 6, Parent = frame })
@@ -364,9 +364,8 @@ function LobbyMenu.new(parent: Instance, cb: Callbacks): Menu
 	devButton.root.Visible = false
 
 	local function memberRow(m: { [string]: any }, leaderView: boolean, order: number)
-		local row = Kit.new("Frame", { BackgroundColor3 = C.panelLight, BackgroundTransparency = 0.15, Size = UDim2.new(1, -6, 0, 52), LayoutOrder = order, ZIndex = 8, Parent = partyBody })
-		Kit.corner(6).Parent = row
-		Kit.stroke(1, Theme.slot(order), 0.2).Parent = row
+		local row = Kit.new("Frame", { BackgroundColor3 = Color3.fromRGB(30, 25, 28), BorderSizePixel = 0, Size = UDim2.new(1, -10, 0, 52), LayoutOrder = order, ZIndex = 8, Parent = partyBody })
+		Ornament.well(row)
 		local pic = Kit.new("ImageLabel", { Size = UDim2.fromOffset(40, 40), Position = UDim2.fromOffset(6, 6), BackgroundColor3 = C.inkSoft, Image = Hud.portrait(m.uid), ZIndex = 9, Parent = row })
 		Kit.corner(20).Parent = pic
 		Kit.stroke(2, Theme.slot(order)).Parent = pic
@@ -437,9 +436,9 @@ function LobbyMenu.new(parent: Instance, cb: Callbacks): Menu
 			end
 			for _, op in parties do
 				local leader = Players:GetPlayerByUserId(op.leader)
-				local row = Kit.new("Frame", { BackgroundColor3 = C.panelLight, BackgroundTransparency = 0.15, Size = UDim2.new(1, -6, 0, 50), LayoutOrder = order, ZIndex = 8, Parent = partyBody })
+				local row = Kit.new("Frame", { BackgroundColor3 = Color3.fromRGB(30, 25, 28), BorderSizePixel = 0, Size = UDim2.new(1, -10, 0, 50), LayoutOrder = order, ZIndex = 8, Parent = partyBody })
 				order += 1
-				Kit.corner(6).Parent = row
+				Ornament.well(row)
 				local campaign = Campaigns.ById[op.campaign]
 				Kit.label({ Text = `{if leader then leader.DisplayName else "?"}'s party`, TextSize = 15, Bold = true, Size = UDim2.new(1, -110, 0, 22), Position = UDim2.fromOffset(10, 4), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 9, Parent = row })
 				Kit.label({ Text = `{if campaign then campaign.name else ""} · {#op.members}/{op.maxParty}`, TextSize = 12, TextColor3 = C.textDim, Size = UDim2.new(1, -110, 0, 18), Position = UDim2.fromOffset(10, 26), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 9, Parent = row })
@@ -453,9 +452,9 @@ function LobbyMenu.new(parent: Instance, cb: Callbacks): Menu
 				order += 1
 			end
 			for _, r in runs do
-				local row = Kit.new("Frame", { BackgroundColor3 = C.panelLight, BackgroundTransparency = 0.15, Size = UDim2.new(1, -6, 0, 50), LayoutOrder = order, ZIndex = 8, Parent = partyBody })
+				local row = Kit.new("Frame", { BackgroundColor3 = Color3.fromRGB(30, 25, 28), BorderSizePixel = 0, Size = UDim2.new(1, -10, 0, 50), LayoutOrder = order, ZIndex = 8, Parent = partyBody })
 				order += 1
-				Kit.corner(6).Parent = row
+				Ornament.well(row)
 				local waitText = if r.state == "draft" or r.state == "map" or r.state == "rest" then "joins now" elseif r.waitLow and r.waitHigh then `~{r.waitLow}–{r.waitHigh}s` else "after this fight"
 				Kit.label({ Text = `{r.hostName} · Act {r.act or 1}`, TextSize = 15, Bold = true, Size = UDim2.new(1, -110, 0, 22), Position = UDim2.fromOffset(10, 4), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 9, Parent = row })
 				Kit.label({ Text = `{r.size}/{r.maxParty} heroes · {waitText}`, TextSize = 12, TextColor3 = C.textDim, Size = UDim2.new(1, -110, 0, 18), Position = UDim2.fromOffset(10, 26), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 9, Parent = row })
