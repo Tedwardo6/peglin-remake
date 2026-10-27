@@ -3,6 +3,7 @@
 ## Current state
 
 - **Stage:** Repository and Rojo scaffold created (October 27, 2026). No gameplay yet.
+- **Setup:** Rokit and Rojo 7.7.1 installed on Theodore's Mac; repo cloned to `~/Documents/SeawindStudios/peglin-remake`. Theodore reported the Rojo plugin as probably connected (Oct 27); the Play-test sync check is not yet confirmed.
 - **Design:** Multiplayer design plan in progress (Fable agent brief). Not yet approved.
 - **Next objective:** Prototype 1: one fight, two players, two boards, one boss, one cross-board interaction.
 
@@ -10,7 +11,7 @@
 
 | Place | Purpose | Roblox place ID | Owner (writer) |
 |---|---|---|---|
-| _not yet created_ | Prototype | _record when created_ | Theodore |
+| Baseplate prototype (name unconfirmed) | Prototype | _ID not yet recorded_ | Theodore |
 
 Record real IDs only after verifying them in Studio or Creator Hub.
 
@@ -22,10 +23,10 @@ Record real IDs only after verifying them in Studio or Creator Hub.
 
 ## Last handoff
 
-- **Repo / branch / commit:**
-- **Place and sync state:**
-- **Changes:**
-- **Tests and visual evidence:**
-- **Saved / tested / approved / published:**
-- **Open issues and decisions:**
-- **Next objective and owner:**
+- **Repo / branch / commit:** `main`, scaffold commit `46692af` plus agent-instructions update (Oct 27, 2026). Handbook read at `ca39f94`.
+- **Place and sync state:** Prototype place created by Theodore; Rojo reportedly connected. Sync not yet verified by Play test.
+- **Changes:** Rojo project (three synced code folders), starter scripts, README, AGENTS.md agent guide, STATUS.md.
+- **Tests and visual evidence:** `rojo build` succeeded in a cloud workspace with Rojo 7.7.1. No in-Studio evidence recorded yet.
+- **Saved / tested / approved / published:** Saved to GitHub. Not tested in Studio. Not published.
+- **Open issues and decisions:** Confirm sync (Play shows both "Rojo sync OK" lines). Record the place ID. Register the game in the studio index. Design plan pending.
+- **Next objective and owner:** Theodore confirms sync; then Prototype 1 after the design plan is approved.

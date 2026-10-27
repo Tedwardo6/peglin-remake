@@ -4,6 +4,29 @@ Seawind Interactive's multiplayer pachinko roguelike for Roblox. This is a priva
 
 > The working title is temporary. The shipped game will have its own name, art, characters, orbs, and relics, not Peglin's.
 
+## How it works, in plain words
+
+- The game's **code** is a set of files in this repo. Agents write and change those files.
+- **Rojo** is a bridge: while `rojo serve` is running and the Studio plugin is connected, whatever code is in your `peglin-remake` folder shows up in Studio within a second.
+- **GitHub** is the shared, backed-up copy. Agents save their work there on a **branch**. To try it in Studio, your folder needs that branch (the agent will give you the exact commands).
+- **Models, maps, and lighting** are still built in Studio as usual. Rojo doesn't touch them.
+
+**Your routine when working on the game:**
+
+1. Open Terminal and run:
+   ```sh
+   cd ~/Documents/SeawindStudios/peglin-remake
+   rojo serve
+   ```
+   Leave that window open.
+2. Open the place in Studio → **Plugins** tab → **Rojo** → **Connect**.
+3. Work with your agent. When it says changes are ready, follow its steps, then press **Play** to test.
+4. Done for the day: press Ctrl+C in the Terminal window to stop Rojo.
+
+**Don't edit scripts inside `Server`, `Client`, or `Shared` in Studio.** Rojo will overwrite them. Ask the agent to change the files instead.
+
+Agents: your full instructions are in [AGENTS.md](AGENTS.md).
+
 ## Code and Studio boundary
 
 | What | Owned by | How it moves |
