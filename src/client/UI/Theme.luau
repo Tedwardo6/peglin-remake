@@ -6,7 +6,8 @@
 -- orange/ember and gold are reserved for focal points (actions, damage,
 -- loot). UI (second pass, Theodore's references): dark iron and stone frames
 -- with violet gems over near-black warm interiors, stone-housed glossy bars,
--- gold serif headings on iron plaques (frame art in UI/Skin).
+-- gold serif headings on iron plaques (all built from GUI objects in
+-- UI/Ornament; no uploaded images).
 
 local Theme = {}
 

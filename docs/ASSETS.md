@@ -1,6 +1,6 @@
 # Asset provenance
 
-Every asset the game uses at runtime, where it came from, and whether we may reuse it. The board, altar, scenery, lobby hall, UI and effects are built from code at runtime (parts, tweens, GUI objects). The monsters are the only generated 3D art.
+Every asset the game uses at runtime, where it came from, and whether we may reuse it. The board, altar, scenery, lobby hall, UI and effects are built from code at runtime (parts, tweens, GUI objects). The monsters are the only generated art.
 
 ## Monster models (generated meshes)
 
@@ -76,22 +76,9 @@ end
 
 Each piece rotates about a joint: the middle of where its box overlaps the core's box (the seam the generator already hides), with arms hinged near the top of that overlap. Rotating about these joints keeps limbs attached in every pose. Held items ride the gripping hand but stay mostly upright, then thrust forward on the slam. Floaters rise on the wind-up and dive on the slam; tentacles flare out. Seated monsters lean less so they stay on the throne. All motion is eased (no snapping), and reduced motion turns off idle sway.
 
-## UI frame art
+## UI ornament
 
-Our own images, drawn procedurally by `tools/make_ui_art.py` (height maps lit from the top-left, no source images) into `art/ui/`. Style follows Theodore's October 27 reference screenshots (iron/stone frames with gems, stone-housed bars, round portrait ring, inventory slots); nothing was traced or copied from them. **Reuse status:** ours.
-
-| File | Use | 9-slice centre (source px) |
-|---|---|---|
-| `frame_iron.png` | default panels, button frames | 60, 60, 196, 196 |
-| `frame_ornate.png` | modals, lobby and map panels | 80, 80, 176, 176 |
-| `plaque.png` | headings | 150, 12, 874, 116 |
-| `ring.png`, `disc.png` | portrait seals, round icons | — |
-| `slot.png`, `glow.png` | inset cards and slots, rarity/selection glow | 24, 24, 104, 104 / 32, 32, 96, 96 |
-| `trough.png` | stone housing around every bar | 40, 30, 984, 66 |
-| `fill_red.png`, `fill_blue.png`, `fill_white.png` | tiled bar liquids (white is tinted) | tiled |
-| `grain.png`, `vignette.png` | interior texture and inner shadow | tiled / 48, 48, 80, 80 |
-
-**Uploading:** Studio's image upload only accepts files served from the Mac itself (`http://localhost`). Run `python3 -m http.server 8777` inside `art/ui`, upload through Studio, then paste the returned ids into `src/client/UI/Skin.luau`. Regenerate after changing the script, and keep the slice numbers in `Skin.luau` in step with the generator.
+The iron frames, gem bosses, title plaques, portrait seals, stone bar housings and slots are built in code from Studio GUI objects (Frames, UIStroke, UIGradient, UICorner, rotation) in `src/client/UI/Ornament.luau`. No images are uploaded. The style follows Theodore's October 27 reference screenshots; nothing was traced or copied from them.
 
 ## Heroes
 

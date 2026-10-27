@@ -5,7 +5,7 @@
 - **Stage:** RPG redesign (first pass) on branch `feature/rpg-redesign`, built on top of `feature/full-loop` (draft PR #1). Neither is merged. Not published.
 - **Setup:** Rokit and Rojo 7.7.1 on Theodore's Mac; repo at `~/Documents/SeawindStudios/peglin-remake`. **That folder is now checked out on `feature/rpg-redesign`**, so Studio (with `rojo serve` running) shows the redesign.
 - **Design authority:** `ideas/co-op-pegboard-adventure/research/2026-10-27-merged-multiplayer-proposal.md` in seawind-ideas at `54167c6`, plus Theodore's redesign direction of October 27, 2026 (Peglin-style hero strikes, path map, lobby with parties and campaigns, dark fantasy + psychedelic art, 10× better monsters that animate cleanly, then a UI restyle to his iron/stone references).
-- **Next objective:** finish the UI art upload (one Terminal command from Theodore, see Open issues), then Theodore plays a full act in Studio and a 2-player test.
+- **Next objective:** Theodore plays a full act in Studio and a 2-player test.
 
 ## Places and destinations
 
@@ -36,20 +36,19 @@ Record real IDs only after verifying them in Studio or Creator Hub.
 - **Lobby hall:** form a party (max 2) or begin solo, pick hero class and campaign. One campaign: "The Dreaming Abyss".
 - **Monsters:** ten generated 3D monsters (Roblox mesh generation), animated procedurally about joints so limbs stay attached in every pose: reveal, idle, wind-up, slam, flinch, armor, death. Held weapons stay upright and thrust on the slam; floaters rise and dive; tentacles flare; the seated Drowned King (Act I boss, on his throne with crown, chains and goblet) leans less and has gold-and-diamond glints. See `docs/ASSETS.md`.
 - **Look:** dark fantasy + psychedelic scenery per act (crypt, floating isle, vortex spire), giant watching eyes, vortex sky, checkerboard ledge with key and rim lights.
-- **UI (latest):** rebuilt the shared UI kit around Theodore's references: iron and ornate frames with violet gems, iron title plaques, spiked round portrait seals (your avatar headshot, the monster's live 3D bust), stone-housed glossy red health and blue shield bars, inset slots with rarity glow, red close buttons, warm near-black interiors, gold serif headings. Art is our own, drawn by `tools/make_ui_art.py` into `art/ui/`.
+- **UI (latest):** rebuilt the shared UI kit around Theodore's references: iron and ornate frames with violet gems, iron title plaques, spiked round portrait seals (your avatar headshot, the monster's live 3D bust), stone-housed glossy red health and blue shield bars, inset slots with rarity glow, red close buttons, warm near-black interiors, gold serif headings. Everything is built from Studio GUI objects (`UI/Ornament.luau`); no images to upload. (An earlier image-based attempt was dropped because Studio could not upload the images without a local server on Theodore's Mac.)
 - **Docs:** `docs/ASSETS.md` (monster provenance, capture procedure, UI art), `docs/ARCHITECTURE.md` (strikes, run structure, layout), `docs/ANALYTICS.md` (event map v2).
 
 ### Tests and evidence
 
 - **Headless (Lune):** 6122 checks pass. **Strict types:** `luau-lsp analyze` reports no errors across `src`.
 - **Studio solo Play (screenshots taken by the agent):** lobby with Theodore's avatar; BEGIN SOLO → Act I map; Mire Imp fight with the banked number over the hero, strike and HP drop; relic draft after the win; the Drowned King boss fight; every monster posed in idle / wind-up / slam / flinch side by side with no detached limbs.
-- **Not yet done:** the UI frame art in Studio (waiting on the upload), a 2-client test, a phone readability pass, listening approval.
+- **Not yet done:** a 2-client test, a phone readability pass, listening approval.
 
 **Saved / tested / approved / published:** saved to GitHub on the branch; tested headlessly and in solo Studio Play; not approved; not published.
 
 ### Open issues
 
-- **UI art upload:** Studio only uploads images from a local web server on Theodore's Mac. Once uploaded, the asset ids go into `src/client/UI/Skin.luau`. Until then the UI falls back to plain framed panels (nothing breaks).
 - **Phone checks gate 4-player parties** (`MAX_PARTY` stays 2).
 - **Max Players 8** must be set by Theodore in Game Settings.
 - **Creator Hub analytics ingestion:** unverified.
@@ -69,4 +68,4 @@ Theme and title (working title "Abyss Pegs"; monster and act names are placehold
 
 ### Next objective and owner
 
-Theodore: start the image server (one command) so the agent can finish the UI art, then play Act I solo and a 2-player test, and say what feels off. He decides whether to merge.
+Theodore: play Act I solo and a 2-player test, and say what feels off. He decides whether to merge.
