@@ -37,7 +37,7 @@ local function modal(name: string, size: UDim2, color: Color3?): Modal
 		Parent = layer,
 	})
 	Kit.tween(backdrop, Theme.Motion.open, { BackgroundTransparency = 0.35 })
-	local panel = Kit.panel({ Size = size, Position = UDim2.fromScale(0.5, 0.5), AnchorPoint = Vector2.new(0.5, 0.5), Color = color or C.panel, ZIndex = 21, Parent = backdrop })
+	local panel = Kit.panel({ Size = size, Position = UDim2.fromScale(0.5, 0.5), AnchorPoint = Vector2.new(0.5, 0.5), Color = color or C.panel, Style = "ornate", ZIndex = 21, Parent = backdrop })
 	Kit.popIn(panel)
 	Audio.play("open")
 	local closed = false
@@ -58,6 +58,8 @@ local function modal(name: string, size: UDim2, color: Color3?): Modal
 			for _, d in panel:GetDescendants() do
 				if d:IsA("TextLabel") then
 					Kit.tween(d, Theme.Motion.close, { TextTransparency = 1 })
+				elseif d:IsA("ImageLabel") then
+					Kit.tween(d, Theme.Motion.close, { ImageTransparency = 1 })
 				end
 			end
 			task.delay(Theme.Motion.close + 0.02, function()
@@ -66,6 +68,12 @@ local function modal(name: string, size: UDim2, color: Color3?): Modal
 		end,
 	}
 end
+
+-- A modal's heading on an iron plaque straddling the frame's top edge.
+local function plaqueTitle(panel: Frame, text: string, width: number?, z: number?)
+	return Kit.plaque({ Text = text, Height = 58, Size = UDim2.fromOffset(width or 420, 58), Position = UDim2.new(0.5, 0, 0, -26), AnchorPoint = Vector2.new(0.5, 0), ZIndex = (z or 22) + 2, Parent = panel })
+end
+Screens.plaqueTitle = plaqueTitle
 
 -- Draft ------------------------------------------------------------------
 
@@ -96,8 +104,8 @@ export type Draft = { modal: Modal, setDeadline: (deadline: number, now: number)
 function Screens.draft(offer: { DraftOption }, rack: { string }, rerolls: number, fallback: number, title: string, onPick: (choice: number, slot: number?) -> (), onReroll: () -> ()): Draft
 	local m = modal("Draft", UDim2.fromOffset(820, 470))
 	local p = m.panel
-	Kit.label({ Text = "CLAIM A RELIC", Title = true, Bold = true, TextSize = 44, TextColor3 = C.gold, Size = UDim2.new(1, 0, 0, 46), Position = UDim2.fromOffset(0, 10), ZIndex = 22, Parent = p })
-	Kit.label({ Text = title, TextSize = 18, TextColor3 = C.textDim, Size = UDim2.new(1, 0, 0, 24), Position = UDim2.fromOffset(0, 54), ZIndex = 22, Parent = p })
+	plaqueTitle(p, "Claim a relic", 440)
+	Kit.label({ Text = title, TextSize = 18, TextColor3 = C.textDim, Size = UDim2.new(1, 0, 0, 24), Position = UDim2.fromOffset(0, 46), ZIndex = 22, Parent = p })
 	local cardsHolder = Kit.new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, -40, 0, 290), Position = UDim2.fromOffset(20, 100), ZIndex = 22, Parent = p })
 	local timerBar = Kit.bar({ Size = UDim2.new(1, -260, 0, 22), Position = UDim2.new(0, 20, 1, -42), Color = C.gold, TextSize = 14, ZIndex = 22, Parent = p })
 	local picked = false
@@ -106,7 +114,7 @@ function Screens.draft(offer: { DraftOption }, rack: { string }, rerolls: number
 	local reroll: Kit.Button
 	local function askSlot(choice: number)
 		local sm = modal("Slot", UDim2.fromOffset(520, 250))
-		Kit.label({ Text = "REPLACE WHICH BALL?", Title = true, TextSize = 34, Bold = true, TextColor3 = C.gold, Size = UDim2.new(1, 0, 0, 40), Position = UDim2.fromOffset(0, 16), ZIndex = 22, Parent = sm.panel })
+		plaqueTitle(sm.panel, "Replace which ball?", 400, 22)
 		for i = 2, #rack do
 			local b = Balls.ById[rack[i]]
 			Kit.button({
@@ -313,7 +321,7 @@ function Screens.rest(rack: { string }, healAmount: number, onHeal: () -> (), on
 	local buttons: { Kit.Button } = {}
 	local healCard = Kit.panel({ Size = UDim2.fromOffset(300, 220), Position = UDim2.fromOffset(30, 100), Color = C.panelLight, ZIndex = 22, Parent = m.panel })
 	Kit.label({ Text = "♥", TextSize = 56, TextColor3 = C.hull, Size = UDim2.new(1, 0, 0, 64), Position = UDim2.fromOffset(0, 8), ZIndex = 23, Parent = healCard })
-	Kit.label({ Text = "REST", Title = true, Bold = true, TextSize = 30, Size = UDim2.new(1, 0, 0, 34), Position = UDim2.fromOffset(0, 72), ZIndex = 23, Parent = healCard })
+	Kit.plaque({ Text = "Rest", Height = 40, Size = UDim2.new(1, -40, 0, 40), Position = UDim2.new(0.5, 0, 0, 70), AnchorPoint = Vector2.new(0.5, 0), ZIndex = 23, Parent = healCard })
 	Kit.label({ Text = `Repair {healAmount} health.`, TextSize = 16, TextColor3 = C.textDim, Size = UDim2.new(1, -20, 0, 40), Position = UDim2.fromOffset(10, 108), TextWrapped = true, ZIndex = 23, Parent = healCard })
 	table.insert(buttons, Kit.button({ Text = "REST", Size = UDim2.new(1, -24, 0, 54), Position = UDim2.new(0, 12, 1, -12), AnchorPoint = Vector2.new(0, 1), Face = C.hull, TextSize = 20, ZIndex = 24, OnActivated = function()
 		if not chosen then
@@ -323,7 +331,7 @@ function Screens.rest(rack: { string }, healAmount: number, onHeal: () -> (), on
 	end, Parent = healCard }))
 	local trainCard = Kit.panel({ Size = UDim2.fromOffset(380, 220), Position = UDim2.new(1, -30, 0, 100), AnchorPoint = Vector2.new(1, 0), Color = C.panelLight, ZIndex = 22, Parent = m.panel })
 	Kit.label({ Text = "▲", TextSize = 50, TextColor3 = C.gold, Size = UDim2.new(1, 0, 0, 64), Position = UDim2.fromOffset(0, 8), ZIndex = 23, Parent = trainCard })
-	Kit.label({ Text = "TRAIN", Title = true, Bold = true, TextSize = 30, Size = UDim2.new(1, 0, 0, 34), Position = UDim2.fromOffset(0, 72), ZIndex = 23, Parent = trainCard })
+	Kit.plaque({ Text = "Train", Height = 40, Size = UDim2.new(1, -40, 0, 40), Position = UDim2.new(0.5, 0, 0, 70), AnchorPoint = Vector2.new(0.5, 0), ZIndex = 23, Parent = trainCard })
 	Kit.label({ Text = "+1 damage per hit for one ball:", TextSize = 16, TextColor3 = C.textDim, Size = UDim2.new(1, -20, 0, 22), Position = UDim2.fromOffset(10, 108), ZIndex = 23, Parent = trainCard })
 	for i, id in rack do
 		local b = Balls.ById[id]
@@ -371,7 +379,7 @@ export type SettingsState = { reducedMotion: boolean, music: number, sfx: number
 
 function Screens.settings(state: SettingsState, onChange: (SettingsState) -> (), onLeaveRun: (() -> ())?): Modal
 	local m = modal("Settings", UDim2.fromOffset(520, 420))
-	Kit.label({ Text = "SETTINGS", Title = true, TextSize = 36, Bold = true, TextColor3 = C.gold, Size = UDim2.new(1, 0, 0, 44), Position = UDim2.fromOffset(0, 14), ZIndex = 22, Parent = m.panel })
+	plaqueTitle(m.panel, "Settings", 320)
 	local function toggleRow(y: number, text: string, get: () -> boolean, set: (boolean) -> ())
 		Kit.label({ Text = text, TextSize = 22, Size = UDim2.new(0.6, 0, 0, 30), Position = UDim2.new(0.06, 0, 0, y + 10), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 22, Parent = m.panel })
 		local b: Kit.Button
@@ -456,7 +464,7 @@ end
 
 function Screens.pegKey(): Modal
 	local m = modal("PegKey", UDim2.fromOffset(700, 470))
-	Kit.label({ Text = "PEG KEY", Title = true, TextSize = 34, Bold = true, TextColor3 = C.gold, Size = UDim2.new(1, 0, 0, 42), Position = UDim2.fromOffset(0, 12), ZIndex = 22, Parent = m.panel })
+	plaqueTitle(m.panel, "Peg key", 300)
 	for i, kindName in Pegs.Order do
 		local kind: Pegs.PegKind = kindName :: any
 		local def = Pegs.Defs[kind]
@@ -479,7 +487,7 @@ function Screens.tip(text: string, anchor: UDim2, hold: number?)
 		(tip :: Frame):Destroy()
 		tip = nil
 	end
-	local f = Kit.panel({ Size = UDim2.fromOffset(330, 74), Position = anchor, AnchorPoint = Vector2.new(0.5, 0.5), Color = C.gold, ZIndex = 35, Parent = layer })
+	local f = Kit.panel({ Size = UDim2.fromOffset(330, 74), Position = anchor, AnchorPoint = Vector2.new(0.5, 0.5), Color = Color3.fromRGB(214, 186, 132), ZIndex = 35, Parent = layer })
 	Kit.label({ Text = text, TextSize = 19, TextColor3 = C.ink, Stroke = false, Size = UDim2.new(1, -20, 1, -10), Position = UDim2.fromOffset(10, 5), TextWrapped = true, ZIndex = 36, Parent = f })
 	Kit.popIn(f)
 	tip = f
@@ -533,7 +541,7 @@ local idle: Modal? = nil
 function Screens.idleWarning(show: boolean)
 	if show and idle == nil then
 		local m = modal("Idle", UDim2.fromOffset(460, 180), C.panelLight)
-		Kit.label({ Text = "STILL THERE?", Title = true, TextSize = 36, Bold = true, TextColor3 = C.gold, Size = UDim2.new(1, 0, 0, 46), Position = UDim2.fromOffset(0, 24), ZIndex = 22, Parent = m.panel })
+		plaqueTitle(m.panel, "Still there?", 360)
 		Kit.label({ Text = "Aim or launch in 15 s to keep your seat in this fight.", TextSize = 18, Size = UDim2.new(1, -30, 0, 50), Position = UDim2.fromOffset(15, 80), TextWrapped = true, ZIndex = 22, Parent = m.panel })
 		m.backdrop.BackgroundTransparency = 0.6
 		idle = m

@@ -202,6 +202,10 @@ local function setMonster(enemyId: string?, encId: string)
 		m:hide()
 		monster = m
 		monsterEncId = encId
+		local def = Enemies.ById[enemyId]
+		if hud and def then
+			hud:setEnemyPortrait(def.look.model)
+		end
 	end
 end
 

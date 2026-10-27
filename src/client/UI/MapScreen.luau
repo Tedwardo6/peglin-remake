@@ -77,7 +77,7 @@ function MapScreen.open(parent: Instance, onVote: (nodeId: string) -> ()): View
 	local swirl = Kit.new("Frame", { BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.88, Size = UDim2.fromOffset(900, 900), Position = UDim2.fromScale(0.5, 0.55), AnchorPoint = Vector2.new(0.5, 0.5), ZIndex = 20, Parent = frame })
 	Kit.corner(450).Parent = swirl
 	Kit.shimmer(swirl, 8)
-	local chart = Kit.panel({ Size = UDim2.fromOffset(940, 420), Position = UDim2.new(0.5, 0, 0.5, 18), AnchorPoint = Vector2.new(0.5, 0.5), Color = Color3.fromRGB(8, 8, 28), Transparency = 0.15, ZIndex = 21, Parent = frame })
+	local chart = Kit.panel({ Size = UDim2.fromOffset(940, 420), Position = UDim2.new(0.5, 0, 0.5, 18), AnchorPoint = Vector2.new(0.5, 0.5), Color = Color3.fromRGB(16, 12, 20), Style = "ornate", Transparency = 0.15, ZIndex = 21, Parent = frame })
 	local title = Kit.label({ Text = "", Title = true, Bold = true, TextSize = 44, TextColor3 = C.gold, Size = UDim2.fromOffset(900, 48), Position = UDim2.new(0.5, 0, 0, 8), AnchorPoint = Vector2.new(0.5, 0), ZIndex = 22, Parent = frame })
 	local sub = Kit.label({ Text = "", TextSize = 16, TextColor3 = C.textDim, Size = UDim2.fromOffset(900, 22), Position = UDim2.new(0.5, 0, 0, 56), AnchorPoint = Vector2.new(0.5, 0), ZIndex = 22, Parent = frame })
 	local timer = Kit.bar({ Size = UDim2.fromOffset(420, 16), Position = UDim2.new(0.5, 0, 1, -54), AnchorPoint = Vector2.new(0.5, 0), Color = C.gold, TextSize = 12, ZIndex = 22, Parent = frame })

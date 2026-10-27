@@ -12,6 +12,7 @@ local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 
 local Theme = require(script.Parent.Theme)
+local Skin = require(script.Parent.Skin)
 local Audio = require(script.Parent.Parent.Juice.Audio)
 
 local C = Theme.Color
@@ -103,7 +104,7 @@ function Kit.label(props: Props): TextLabel
 	local size = props.TextSize or 22
 	local label = Kit.new("TextLabel", {
 		BackgroundTransparency = 1,
-		FontFace = if props.Title then (if props.Bold then Theme.FontTitleBold else Theme.FontTitle) elseif props.Bold then Theme.FontBold else Theme.Font,
+		FontFace = if props.Heavy then Theme.FontHeavy elseif props.Title then (if props.Bold then Theme.FontTitleBold else Theme.FontTitle) elseif props.Bold then Theme.FontBold else Theme.Font,
 		TextColor3 = props.TextColor3 or C.text,
 		TextSize = size,
 		TextScaled = props.TextScaled or false,
@@ -129,10 +130,83 @@ function Kit.label(props: Props): TextLabel
 	return label
 end
 
+-- Frame art ----------------------------------------------------------------
+
+-- A 9-slice image layer behind a frame's children (ZIndex 0 sorts before
+-- the default 1, so content always draws on top).
+function Kit.sliced(parent: Instance, key: string, scale: number, outset: number, props: Props?): ImageLabel
+	local p: Props = props or ({} :: Props)
+	return Kit.new("ImageLabel", {
+		Name = p.Name or key,
+		BackgroundTransparency = 1,
+		Image = Skin.id(key),
+		ScaleType = Enum.ScaleType.Slice,
+		SliceCenter = (Skin.Slice :: any)[key],
+		SliceScale = scale,
+		ImageColor3 = p.Color or Color3.new(1, 1, 1),
+		ImageTransparency = p.Transparency or 0,
+		Size = UDim2.new(1, outset * 2, 1, outset * 2),
+		Position = UDim2.fromOffset(-outset, -outset),
+		ZIndex = p.ZIndex or 0,
+		Parent = parent,
+	})
+end
+
+-- Fine grain and an inner shadow over a flat interior colour.
+function Kit.texture(parent: Instance, grainAlpha: number?, vignetteAlpha: number?)
+	if Skin.has("grain") then
+		Kit.new("ImageLabel", {
+			Name = "Grain",
+			BackgroundTransparency = 1,
+			Image = Skin.id("grain"),
+			ScaleType = Enum.ScaleType.Tile,
+			TileSize = UDim2.fromOffset(160, 160),
+			ImageTransparency = 1 - (grainAlpha or 0.14),
+			Size = UDim2.fromScale(1, 1),
+			ZIndex = 0,
+			Parent = parent,
+		})
+	end
+	if Skin.has("vignette") then
+		Kit.sliced(parent, "vignette", 0.6, 0, { Name = "Shade", Transparency = 1 - (vignetteAlpha or 0.9) })
+	end
+end
+
+-- A soft coloured glow around a frame (rarity / focus / danger).
+function Kit.glow(parent: Instance, color: Color3, outset: number?, transparency: number?): ImageLabel?
+	if not Skin.has("glow") then
+		return nil
+	end
+	return Kit.sliced(parent, "glow", 0.5, outset or 6, { Name = "Glow", Color = color, Transparency = transparency or 0 })
+end
+
+-- Panels:
+--   Style "iron"   (default) iron frame with corner rivets, dark interior
+--   Style "ornate" heavier frame with gem bosses, for full screens/modals
+--   Style "slot"   an inset item slot (Color = C.panelLight picks this)
+--   Style "round"  a round dark seal in a spiked ring (Radius >= 26)
+--   Style "chip"   a small coloured gem plate (Radius 12..20 on small panels)
+-- `StrokeColor` adds a glow in that colour. The returned Frame's
+-- BackgroundColor3 is the interior colour, so callers can still recolour it.
 function Kit.panel(props: Props): Frame
+	local style: string = props.Style or ""
+	if style == "" then
+		local r = props.Radius or 0
+		if r >= 26 then
+			style = "round"
+		elseif r >= 12 then
+			style = "chip"
+		elseif props.Color == C.panelLight then
+			style = "slot"
+		else
+			style = "iron"
+		end
+	end
+	local skinned = Skin.has("frameIron")
 	local f = Kit.new("Frame", {
 		BackgroundColor3 = props.Color or C.panel,
 		BackgroundTransparency = props.Transparency or 0,
+		BorderSizePixel = 0,
 		Size = props.Size or UDim2.fromOffset(200, 100),
 		Position = props.Position or UDim2.new(),
 		AnchorPoint = props.AnchorPoint or Vector2.zero,
@@ -142,21 +216,82 @@ function Kit.panel(props: Props): Frame
 		Visible = if props.Visible == nil then true else props.Visible,
 		Parent = props.Parent,
 	})
-	Kit.corner(props.Radius or 8).Parent = f
-	local rim = Kit.stroke(props.StrokeThickness or Theme.Stroke.ui, if props.StrokeColor then props.StrokeColor else Color3.new(1, 1, 1))
-	rim.Parent = f
-	if props.StrokeColor == nil then
-		-- Iridescent rune rim.
-		Kit.shimmer(rim, props.ShimmerSpeed or 30)
+	if not skinned then
+		-- Plain fallback until the frame art is uploaded.
+		Kit.corner(if style == "round" then (props.Radius or 30) else 4).Parent = f
+		Kit.stroke(props.StrokeThickness or Theme.Stroke.ui, props.StrokeColor or C.ironLight).Parent = f
+		return f
 	end
-	if props.Gradient ~= false then
-		Kit.new("UIGradient", {
-			Rotation = 90,
-			Color = ColorSequence.new(Color3.fromRGB(235, 235, 255), Color3.fromRGB(120, 120, 170)),
-			Parent = f,
-		})
+	if props.StrokeColor then
+		Kit.glow(f, props.StrokeColor, if style == "chip" then 4 else 8, 0.15)
+	end
+	if style == "round" then
+		f.BackgroundTransparency = 1
+		Kit.new("ImageLabel", { Name = "Disc", BackgroundTransparency = 1, Image = Skin.id("disc"), ImageColor3 = if props.Color then props.Color:Lerp(Color3.new(1, 1, 1), 0.25) else Color3.new(1, 1, 1), Size = UDim2.fromScale(1.05, 1.05), Position = UDim2.fromScale(0.5, 0.5), AnchorPoint = Vector2.new(0.5, 0.5), ZIndex = 0, Parent = f })
+		Kit.new("ImageLabel", { Name = "Ring", BackgroundTransparency = 1, Image = Skin.id("ring"), Size = UDim2.fromScale(1.32, 1.32), Position = UDim2.fromScale(0.5, 0.5), AnchorPoint = Vector2.new(0.5, 0.5), ZIndex = 0, Parent = f })
+	elseif style == "slot" then
+		f.BackgroundTransparency = 1
+		Kit.sliced(f, "slot", 0.5, 2, { Name = "Well", Color = if props.Color and props.Color ~= C.panelLight then props.Color:Lerp(Color3.new(1, 1, 1), 0.55) else nil })
+	elseif style == "chip" then
+		Kit.new("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(120, 110, 120)), Parent = f })
+		Kit.sliced(f, "frameIron", 0.22, 3, { Name = "Frame" })
+	else
+		local ornate = style == "ornate"
+		Kit.texture(f)
+		Kit.sliced(f, if ornate then "frameOrnate" else "frameIron", props.SliceScale or (if ornate then 0.5 else 0.42), if ornate then 8 else 5, { Name = "Frame" })
 	end
 	return f
+end
+
+-- A heading on an iron plaque with gem caps (the references' "CHARACTER").
+function Kit.plaque(props: Props): Frame
+	local h = props.Height or 54
+	local holder = Kit.new("Frame", {
+		Name = props.Name or "Plaque",
+		BackgroundTransparency = 1,
+		Size = props.Size or UDim2.fromOffset(360, h),
+		Position = props.Position or UDim2.new(),
+		AnchorPoint = props.AnchorPoint or Vector2.zero,
+		ZIndex = props.ZIndex or 1,
+		Parent = props.Parent,
+	})
+	if Skin.has("plaque") then
+		Kit.new("ImageLabel", {
+			Name = "Plate",
+			BackgroundTransparency = 1,
+			Image = Skin.id("plaque"),
+			ScaleType = Enum.ScaleType.Slice,
+			SliceCenter = Skin.Slice.plaque,
+			SliceScale = h / 128,
+			Size = UDim2.fromScale(1, 1),
+			ZIndex = 0,
+			Parent = holder,
+		})
+	end
+	local label = Kit.label({
+		Text = string.upper(props.Text or ""),
+		Heavy = true,
+		TextSize = props.TextSize or math.floor(h * 0.5),
+		TextColor3 = props.TextColor3 or C.gold,
+		Size = UDim2.new(1, -math.floor(h * 2.6), 1, -6),
+		Position = UDim2.fromScale(0.5, 0.5),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		TextScaled = true,
+		MaxTextSize = props.TextSize or math.floor(h * 0.5),
+		ZIndex = 1,
+		Parent = holder,
+	})
+	label.Name = "Title"
+	return holder
+end
+
+-- A round portrait seal (disc + spiked ring); returns the frame and the
+-- inner holder to put an image or viewport in.
+function Kit.portrait(props: Props): (Frame, Frame)
+	local f = Kit.panel({ Name = props.Name or "Portrait", Size = props.Size or UDim2.fromOffset(84, 84), Position = props.Position, AnchorPoint = props.AnchorPoint, Radius = 999, Style = "round", ZIndex = props.ZIndex, Parent = props.Parent })
+	local inner = Kit.new("Frame", { Name = "Face", BackgroundTransparency = 1, Size = UDim2.fromScale(0.82, 0.82), Position = UDim2.fromScale(0.5, 0.5), AnchorPoint = Vector2.new(0.5, 0.5), ClipsDescendants = true, ZIndex = 1, Parent = f })
+	Kit.corner(999).Parent = inner
+	return f, inner
 end
 
 -- Raised Button -----------------------------------------------------------
@@ -221,7 +356,8 @@ function Kit.button(props: ButtonProps): Button
 		Position = UDim2.fromOffset(0, 0),
 		Parent = content,
 	})
-	Kit.corner(7).Parent = body
+	local skinned = Skin.has("frameIron")
+	Kit.corner(if skinned then 3 else 7).Parent = body
 	local bodyStroke = Kit.stroke(Theme.Stroke.ui, C.ink)
 	bodyStroke.Parent = body
 	local face: Frame = Kit.new("Frame", {
@@ -231,12 +367,12 @@ function Kit.button(props: ButtonProps): Button
 		Position = UDim2.fromOffset(0, 0),
 		Parent = body,
 	})
-	Kit.corner(6).Parent = face
-	-- Engraved rim: a thin bright line inside the face edge.
+	Kit.corner(if skinned then 3 else 6).Parent = face
+	-- Hover rim: a thin gold line inside the face edge.
 	local rim = Kit.new("UIStroke", {
 		Thickness = 1.5,
-		Color = Color3.new(1, 1, 1),
-		Transparency = 0.55,
+		Color = if skinned then C.gold else Color3.new(1, 1, 1),
+		Transparency = if skinned then 1 else 0.55,
 		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
 		Parent = face,
 	})
@@ -244,12 +380,12 @@ function Kit.button(props: ButtonProps): Button
 	local shine: Frame = Kit.new("Frame", {
 		Name = "Shine",
 		BackgroundColor3 = Color3.new(1, 1, 1),
-		BackgroundTransparency = 0.78,
+		BackgroundTransparency = if skinned then 0.86 else 0.78,
 		Size = UDim2.new(1, -10, 0.42, 0),
 		Position = UDim2.fromOffset(5, 3),
 		Parent = face,
 	})
-	Kit.corner(4).Parent = shine
+	Kit.corner(if skinned then 2 else 4).Parent = shine
 	Kit.new("UIGradient", {
 		Rotation = 90,
 		Transparency = NumberSequence.new(0, 1),
@@ -257,9 +393,15 @@ function Kit.button(props: ButtonProps): Button
 	})
 	Kit.new("UIGradient", {
 		Rotation = 90,
-		Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(150, 140, 190)),
+		Color = if skinned then ColorSequence.new(Color3.fromRGB(235, 225, 215), Color3.fromRGB(95, 85, 85)) else ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(150, 140, 190)),
 		Parent = face,
 	})
+	if skinned then
+		-- Hammered texture on the face and an iron frame around the button.
+		Kit.texture(face, 0.18, 0.55)
+		local h = if props.Size then props.Size.Y.Offset else 64
+		Kit.sliced(body, "frameIron", math.clamp(h / 230, 0.2, 0.36), 3, { Name = "Frame", ZIndex = 2 })
+	end
 	local text = props.Text or ""
 	if props.Icon then
 		text = props.Icon .. "  " .. text
@@ -280,6 +422,12 @@ function Kit.button(props: ButtonProps): Button
 		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
 		Parent = face,
 	})
+	-- Selected: a cyan rarity glow around the whole button.
+	local selectGlow = Kit.glow(content, C.cyan, 7, 0)
+	if selectGlow then
+		selectGlow.Visible = false
+		selectGlow.ZIndex = 3
+	end
 
 	local function apply(t: number)
 		local pressed = pressing and enabled
@@ -288,7 +436,7 @@ function Kit.button(props: ButtonProps): Button
 			targetScale = 1
 		end
 		Kit.tween(scale, t, { Scale = targetScale })
-		Kit.tween(rim, t, { Transparency = if hovering and enabled then 0.1 else 0.55 })
+		Kit.tween(rim, t, { Transparency = if hovering and enabled then 0.1 else (if skinned then 1 else 0.55) })
 		-- Face moves down; the silhouette top follows; the bottom edge stays put.
 		local off = if pressed then travel else 0
 		Kit.tween(body, t, { Position = UDim2.fromOffset(0, off), Size = UDim2.new(1, 0, 1, -off) })
@@ -389,7 +537,11 @@ function Kit.button(props: ButtonProps): Button
 		end,
 		setSelected = function(on: boolean)
 			selected = on
-			Kit.tween(selectRing, 0.12, { Thickness = if selected then 4 else 0 })
+			if selectGlow then
+				selectGlow.Visible = selected
+			else
+				Kit.tween(selectRing, 0.12, { Thickness = if selected then 4 else 0 })
+			end
 		end,
 		destroy = function()
 			focusConn:Disconnect()
@@ -419,8 +571,13 @@ function Kit.bar(props: Props): Bar
 		ZIndex = props.ZIndex or 1,
 		Parent = props.Parent,
 	})
-	Kit.corner(props.Radius or 5).Parent = root
-	Kit.stroke(1.5, props.RimColor or C.goldDeep).Parent = root
+	local skinned = Skin.has("trough")
+	if skinned then
+		root.BackgroundColor3 = Color3.fromRGB(10, 7, 11)
+	else
+		Kit.corner(props.Radius or 5).Parent = root
+		Kit.stroke(1.5, props.RimColor or C.goldDeep).Parent = root
+	end
 	local inner: Frame = Kit.new("Frame", {
 		Name = "Inner",
 		BackgroundTransparency = 1,
@@ -444,11 +601,13 @@ function Kit.bar(props: Props): Bar
 		Parent = inner,
 	})
 	Kit.corner(math.max(2, (props.Radius or 5) - 2)).Parent = fill
-	Kit.new("UIGradient", {
-		Rotation = 90,
-		Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(150, 140, 180)),
-		Parent = fill,
-	})
+	if not skinned then
+		Kit.new("UIGradient", {
+			Rotation = 90,
+			Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(150, 140, 180)),
+			Parent = fill,
+		})
+	end
 	local overlay: Frame = Kit.new("Frame", {
 		Name = "Overlay",
 		BackgroundColor3 = props.OverlayColor or C.shield,
@@ -457,6 +616,42 @@ function Kit.bar(props: Props): Bar
 		Parent = inner,
 	})
 	Kit.corner(math.max(2, (props.Radius or 5) - 2)).Parent = overlay
+	if skinned then
+		-- Glossy liquid textures inside the fill, and the stone housing on top.
+		local function liquid(host: Frame, color: Color3)
+			local key = if color == C.hull or color == C.enemyHp or color == C.red then "fillRed" elseif color == C.shield or color == C.blue then "fillBlue" else "fillWhite"
+			Kit.new("ImageLabel", {
+				Name = "Liquid",
+				BackgroundTransparency = 1,
+				Image = Skin.id(key),
+				ImageColor3 = if key == "fillWhite" then color else Color3.new(1, 1, 1),
+				ScaleType = Enum.ScaleType.Tile,
+				TileSize = UDim2.new(0, 110, 1, 0),
+				Size = UDim2.fromScale(1, 1),
+				Parent = host,
+			})
+		end
+		liquid(fill, props.Color or C.hull)
+		liquid(overlay, props.OverlayColor or C.shield)
+		overlay.BackgroundTransparency = 0
+		ghost.BackgroundColor3 = Color3.fromRGB(255, 236, 214)
+		local h = if props.Size then props.Size.Y.Offset else 26
+		local s = math.clamp(h * 0.012, 0.22, 0.42)
+		local px = math.floor(Skin.Band.trough.x * s + 0.5) - 3
+		local py = math.floor(Skin.Band.trough.y * s + 0.5) - 2
+		Kit.new("ImageLabel", {
+			Name = "Housing",
+			BackgroundTransparency = 1,
+			Image = Skin.id("trough"),
+			ScaleType = Enum.ScaleType.Slice,
+			SliceCenter = Skin.Slice.trough,
+			SliceScale = s,
+			Size = UDim2.new(1, px * 2, 1, py * 2),
+			Position = UDim2.fromOffset(-px, -py),
+			ZIndex = 2,
+			Parent = root,
+		})
+	end
 	local text = Kit.label({
 		Text = "",
 		TextSize = props.TextSize or 18,

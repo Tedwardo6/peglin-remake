@@ -64,18 +64,21 @@ local FAMILY_NAMES = { ricochet = "Ricochet", relay = "Relay", guard = "Guard", 
 local FAMILY_ORDER = { "ricochet", "relay", "guard", "wild" }
 local CLASS_GLYPH = { ricochet = "⚔️", relay = "🔮", guard = "🛡️" }
 
+-- Section heading: an iron plaque straddling the panel's top edge. Returns
+-- the title label so callers can change the text.
 local function heading(parent: Instance, text: string, y: number, z: number): TextLabel
-	return Kit.label({ Text = text, Title = true, Bold = true, TextSize = 26, TextColor3 = C.gold, Size = UDim2.new(1, -24, 0, 30), Position = UDim2.fromOffset(12, y), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = z, Parent = parent })
+	local plaque = Kit.plaque({ Text = text, Height = 48, Size = UDim2.fromOffset(280, 48), Position = UDim2.new(0.5, 0, 0, y - 30), AnchorPoint = Vector2.new(0.5, 0), ZIndex = z + 1, Parent = parent })
+	return plaque:FindFirstChild("Title") :: TextLabel
 end
 
 local function popup(parent: Instance, title: string, size: UDim2): (Frame, () -> ())
 	local back = Kit.new("TextButton", { Text = "", AutoButtonColor = false, BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 0.45, Size = UDim2.fromScale(1, 1), ZIndex = 30, Parent = parent })
-	local panel = Kit.panel({ Size = size, Position = UDim2.fromScale(0.5, 0.5), AnchorPoint = Vector2.new(0.5, 0.5), Color = C.panel, ZIndex = 31, Parent = back })
-	Kit.label({ Text = title, Title = true, Bold = true, TextSize = 34, TextColor3 = C.gold, Size = UDim2.new(1, 0, 0, 40), Position = UDim2.fromOffset(0, 10), ZIndex = 32, Parent = panel })
+	local panel = Kit.panel({ Size = size, Position = UDim2.fromScale(0.5, 0.5), AnchorPoint = Vector2.new(0.5, 0.5), Color = C.panel, Style = "ornate", ZIndex = 31, Parent = back })
+	Kit.plaque({ Text = title, Height = 56, Size = UDim2.fromOffset(math.min(420, size.X.Offset - 80), 56), Position = UDim2.new(0.5, 0, 0, -24), AnchorPoint = Vector2.new(0.5, 0), ZIndex = 34, Parent = panel })
 	local function close()
 		back:Destroy()
 	end
-	Kit.button({ Text = "X", Size = UDim2.fromOffset(44, 44), Position = UDim2.new(1, -10, 0, 10), AnchorPoint = Vector2.new(1, 0), Face = C.panelLight, TextSize = 20, ZIndex = 33, OnActivated = close, Parent = panel })
+	Kit.button({ Text = "X", Size = UDim2.fromOffset(44, 44), Position = UDim2.new(1, -10, 0, 10), AnchorPoint = Vector2.new(1, 0), Face = C.redDeep, TextSize = 20, ZIndex = 33, OnActivated = close, Parent = panel })
 	Kit.popIn(panel)
 	return panel, close
 end
@@ -101,7 +104,7 @@ function LobbyMenu.new(parent: Instance, cb: Callbacks): Menu
 	local statsLine = Kit.label({ Text = "", TextSize = 13, TextColor3 = C.textDim, Size = UDim2.fromOffset(460, 18), Position = UDim2.fromOffset(26, 90), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 6, Parent = frame })
 
 	-- Campaign card (left).
-	local camp = Kit.panel({ Size = UDim2.fromOffset(330, 250), Position = UDim2.fromOffset(16, 118), Color = C.panel, Transparency = 0.08, ZIndex = 6, Parent = frame })
+	local camp = Kit.panel({ Size = UDim2.fromOffset(330, 250), Position = UDim2.fromOffset(16, 124), Color = C.panel, Transparency = 0.04, Style = "ornate", ZIndex = 6, Parent = frame })
 	heading(camp, "CAMPAIGN", 8, 7)
 	local campName = Kit.label({ Text = "", Title = true, TextSize = 28, Size = UDim2.new(1, -24, 0, 32), Position = UDim2.fromOffset(12, 40), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 7, Parent = camp })
 	local campBlurb = Kit.label({ Text = "", TextSize = 14, TextColor3 = C.textDim, Size = UDim2.new(1, -24, 0, 54), Position = UDim2.fromOffset(12, 74), TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, ZIndex = 7, Parent = camp })
@@ -128,7 +131,7 @@ function LobbyMenu.new(parent: Instance, cb: Callbacks): Menu
 	refreshCampaign()
 
 	-- Class choice (right top).
-	local classPanel = Kit.panel({ Size = UDim2.fromOffset(372, 196), Position = UDim2.new(1, -16, 0, 16), AnchorPoint = Vector2.new(1, 0), Color = C.panel, Transparency = 0.08, ZIndex = 6, Parent = frame })
+	local classPanel = Kit.panel({ Size = UDim2.fromOffset(372, 196), Position = UDim2.new(1, -16, 0, 34), AnchorPoint = Vector2.new(1, 0), Color = C.panel, Transparency = 0.04, Style = "ornate", ZIndex = 6, Parent = frame })
 	heading(classPanel, "YOUR HERO", 8, 7)
 	local classButtons: { [string]: Kit.Button } = {}
 	local classDesc = Kit.label({ Text = "", TextSize = 14, Size = UDim2.new(1, -24, 0, 34), Position = UDim2.fromOffset(12, 112), TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, ZIndex = 7, Parent = classPanel })
@@ -175,7 +178,7 @@ function LobbyMenu.new(parent: Instance, cb: Callbacks): Menu
 	refreshClass()
 
 	-- Party / joinable lists (right).
-	local partyPanel = Kit.panel({ Size = UDim2.new(0, 372, 1, -330), Position = UDim2.new(1, -16, 0, 222), AnchorPoint = Vector2.new(1, 0), Color = C.panel, Transparency = 0.08, ZIndex = 6, Parent = frame })
+	local partyPanel = Kit.panel({ Size = UDim2.new(0, 372, 1, -364), Position = UDim2.new(1, -16, 0, 262), AnchorPoint = Vector2.new(1, 0), Color = C.panel, Transparency = 0.04, Style = "ornate", ZIndex = 6, Parent = frame })
 	local partyTitle = heading(partyPanel, "PARTY", 8, 7)
 	local partyBody: ScrollingFrame = Kit.new("ScrollingFrame", {
 		BackgroundTransparency = 1,

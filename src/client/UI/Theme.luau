@@ -4,7 +4,9 @@
 -- Direction (Theodore, Oct 27 2026): dark fantasy + psychedelic. Near-black
 -- navy and electric blue/indigo dominate; violet glows on top; warm
 -- orange/ember and gold are reserved for focal points (actions, damage,
--- loot). Stone/iron panels with an iridescent rune rim; gothic titles.
+-- loot). UI (second pass, Theodore's references): dark iron and stone frames
+-- with violet gems over near-black warm interiors, stone-housed glossy bars,
+-- gold serif headings on iron plaques (frame art in UI/Skin).
 
 local Theme = {}
 
@@ -13,15 +15,17 @@ local function rgb(r: number, g: number, b: number): Color3
 end
 
 Theme.Color = {
-	ink = rgb(4, 4, 16), -- outlines, text stroke
-	inkSoft = rgb(16, 14, 40),
-	panel = rgb(12, 12, 34),
-	panelLight = rgb(28, 26, 66),
+	ink = rgb(6, 4, 10), -- outlines, text stroke
+	inkSoft = rgb(18, 14, 22),
+	panel = rgb(22, 18, 22), -- near-black warm interior inside iron frames
+	panelLight = rgb(34, 29, 33), -- inset cards and slots
 	panelEdge = rgb(96, 84, 210),
 	rune = rgb(110, 150, 255), -- rim glow
-	text = rgb(238, 234, 255),
-	textDim = rgb(162, 160, 214),
-	gold = rgb(255, 200, 92),
+	text = rgb(240, 233, 220),
+	textDim = rgb(176, 166, 178),
+	gold = rgb(240, 196, 96),
+	iron = rgb(64, 58, 58),
+	ironLight = rgb(120, 110, 104),
 	goldDeep = rgb(160, 104, 28),
 	ember = rgb(255, 128, 48),
 	emberDeep = rgb(170, 60, 20),
@@ -57,6 +61,9 @@ Theme.Font = Font.fromEnum(Enum.Font.Merriweather)
 Theme.FontBold = Font.new("rbxasset://fonts/families/Merriweather.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal)
 Theme.FontTitle = Font.fromEnum(Enum.Font.GrenzeGotisch)
 Theme.FontTitleBold = Font.new("rbxasset://fonts/families/GrenzeGotisch.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal)
+-- Heavy serif caps for plaque headings and stat lines (the references' gold
+-- "CHARACTER" / "STATS" lettering).
+Theme.FontHeavy = Font.new("rbxasset://fonts/families/Merriweather.json", Enum.FontWeight.Heavy, Enum.FontStyle.Normal)
 
 Theme.Stroke = {
 	ui = 2, -- outline thickness for panels/buttons at normal scale

@@ -51,6 +51,10 @@ export type Hud = typeof(setmetatable(
 		threatTime: TextLabel,
 		threatScale: UIScale,
 		hullBar: Kit.Bar,
+		shieldBar: Kit.Bar,
+		enemyFace: Frame,
+		enemyModelKey: string,
+		selfFace: ImageLabel,
 		hullLabel: TextLabel,
 		shieldLabel: TextLabel,
 		chargeSlot: Frame,
@@ -127,28 +131,32 @@ function Hud.new(gui: Instance, onSelectSlot: (number) -> (), onLaunch: () -> ()
 	self.settingsButton = Kit.button({ Text = "⚙", Size = UDim2.fromOffset(60, 58), Position = UDim2.new(1, -16, 0, 12), AnchorPoint = Vector2.new(1, 0), Face = C.panelLight, TextSize = 30, Depth = 6, OnActivated = onSettings, Parent = root })
 	self.keyButton = Kit.button({ Text = "?", Size = UDim2.fromOffset(60, 58), Position = UDim2.new(1, -86, 0, 12), AnchorPoint = Vector2.new(1, 0), Face = C.panelLight, TextSize = 30, Depth = 6, OnActivated = onKey, Parent = root })
 
-	-- Monster panel (top-right, above the monster).
-	local enemyPanel = Kit.panel({ Name = "Enemy", Size = UDim2.fromOffset(360, 92), Position = UDim2.fromOffset(356, 12), Color = C.panel, Parent = root })
+	-- Monster panel (top band): its portrait in a spiked seal, name, HP.
+	local enemyPanel = Kit.panel({ Name = "Enemy", Size = UDim2.fromOffset(392, 92), Position = UDim2.fromOffset(372, 12), Color = C.panel, Parent = root })
 	self.enemyPanel = enemyPanel
-	self.enemyName = Kit.label({ Text = "Monster", Title = true, Bold = true, TextSize = 28, Size = UDim2.new(1, -20, 0, 30), Position = UDim2.fromOffset(10, 4), TextXAlignment = Enum.TextXAlignment.Left, Parent = enemyPanel })
-	self.phaseLabel = Kit.label({ Text = "", TextSize = 16, TextColor3 = C.gold, Size = UDim2.new(1, -20, 0, 20), Position = UDim2.fromOffset(10, 6), TextXAlignment = Enum.TextXAlignment.Right, Parent = enemyPanel })
-	self.enemyBar = Kit.bar({ Size = UDim2.new(1, -20, 0, 34), Position = UDim2.fromOffset(10, 40), Color = C.enemyHp, OverlayColor = C.armor, TextSize = 20, Parent = enemyPanel })
-	self.armorLabel = Kit.label({ Text = "", TextSize = 15, TextColor3 = C.armor, Size = UDim2.new(1, -20, 0, 18), Position = UDim2.new(0, 10, 1, 2), TextXAlignment = Enum.TextXAlignment.Right, Parent = enemyPanel })
+	local seal, face = Kit.portrait({ Name = "EnemySeal", Size = UDim2.fromOffset(78, 78), Position = UDim2.new(0, -14, 0.5, 0), AnchorPoint = Vector2.new(0, 0.5), ZIndex = 3, Parent = enemyPanel })
+	local _ = seal
+	self.enemyFace = face
+	self.enemyModelKey = ""
+	self.enemyName = Kit.label({ Text = "Monster", Title = true, Bold = true, TextSize = 28, Size = UDim2.new(1, -96, 0, 30), Position = UDim2.fromOffset(84, 4), TextXAlignment = Enum.TextXAlignment.Left, Parent = enemyPanel })
+	self.phaseLabel = Kit.label({ Text = "", TextSize = 16, TextColor3 = C.gold, Size = UDim2.new(1, -96, 0, 20), Position = UDim2.fromOffset(84, 8), TextXAlignment = Enum.TextXAlignment.Right, Parent = enemyPanel })
+	self.enemyBar = Kit.bar({ Size = UDim2.new(1, -100, 0, 30), Position = UDim2.fromOffset(84, 44), Color = C.enemyHp, OverlayColor = C.armor, TextSize = 19, Parent = enemyPanel })
+	self.armorLabel = Kit.label({ Text = "", TextSize = 15, TextColor3 = C.armor, Size = UDim2.new(1, -96, 0, 18), Position = UDim2.new(0, 84, 1, 4), TextXAlignment = Enum.TextXAlignment.Right, Parent = enemyPanel })
 	-- Lost HP split by who dealt it: one segment per hero, in seat colours,
 	-- drawn inside the empty right-hand part of the bar.
-	local contrib = Kit.new("Frame", { Name = "Contribution", BackgroundTransparency = 1, Size = UDim2.new(1, -24, 0, 30), Position = UDim2.fromOffset(12, 42), ClipsDescendants = true, ZIndex = 2, Parent = enemyPanel })
+	local contrib = Kit.new("Frame", { Name = "Contribution", BackgroundTransparency = 1, Size = UDim2.new(1, -104, 0, 26), Position = UDim2.fromOffset(86, 46), ClipsDescendants = true, ZIndex = 2, Parent = enemyPanel })
 	self.contribHolder = contrib
 	self.contribSegs = {}
 	for i = 1, 4 do
 		local seg = Kit.new("Frame", { BackgroundColor3 = Theme.slot(i), BackgroundTransparency = 0.35, BorderSizePixel = 0, Size = UDim2.fromScale(0, 1), Visible = false, ZIndex = 2, Parent = contrib })
 		self.contribSegs[i] = seg
 	end
-	local legend = Kit.new("Frame", { Name = "Legend", BackgroundTransparency = 1, Size = UDim2.new(1, -20, 0, 18), Position = UDim2.new(0, 10, 1, 2), Parent = enemyPanel })
+	local legend = Kit.new("Frame", { Name = "Legend", BackgroundTransparency = 1, Size = UDim2.new(1, -96, 0, 18), Position = UDim2.new(0, 84, 1, 4), Parent = enemyPanel })
 	Kit.new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 10), Parent = legend })
 	self.legend = legend
 
 	-- Threat card (right, mid-height near the monster's head).
-	local card = Kit.panel({ Name = "Threat", Size = UDim2.fromOffset(250, 96), Position = UDim2.new(1, -16, 0, 82), AnchorPoint = Vector2.new(1, 0), Color = Color3.fromRGB(70, 20, 34), StrokeColor = C.threat, Parent = root })
+	local card = Kit.panel({ Name = "Threat", Size = UDim2.fromOffset(250, 96), Position = UDim2.new(1, -16, 0, 86), AnchorPoint = Vector2.new(1, 0), Color = Color3.fromRGB(40, 22, 28), StrokeColor = C.threat, Parent = root })
 	self.threatCard = card
 	self.threatScale = Kit.new("UIScale", { Parent = card })
 	self.threatTitle = Kit.label({ Text = "Slam", Title = true, Bold = true, TextSize = 26, TextColor3 = C.threat, Size = UDim2.new(1, -86, 0, 30), Position = UDim2.fromOffset(12, 8), TextXAlignment = Enum.TextXAlignment.Left, Parent = card })
@@ -156,13 +164,19 @@ function Hud.new(gui: Instance, onSelectSlot: (number) -> (), onLaunch: () -> ()
 	local timeBox = Kit.panel({ Size = UDim2.fromOffset(66, 66), Position = UDim2.new(1, -12, 0.5, 0), AnchorPoint = Vector2.new(1, 0.5), Color = C.ink, Radius = 33, Gradient = false, Parent = card })
 	self.threatTime = Kit.label({ Text = "12", TextSize = 34, Bold = true, Size = UDim2.fromScale(1, 1), Parent = timeBox })
 
-	-- Player panel (bottom-left): hull, shield, held charge.
-	local playerPanel = Kit.panel({ Name = "Player", Size = UDim2.fromOffset(330, 112), Position = UDim2.new(0, 16, 1, -16), AnchorPoint = Vector2.new(0, 1), Color = C.panel, Parent = root })
+	-- Player panel (bottom-left): your hero's seal, health (red) and shield
+	-- (blue) in stone housings, status, held charge.
+	local playerPanel = Kit.panel({ Name = "Player", Size = UDim2.fromOffset(372, 112), Position = UDim2.new(0, 22, 1, -16), AnchorPoint = Vector2.new(0, 1), Color = C.panel, Parent = root })
 	self.playerPanel = playerPanel
-	self.hullLabel = Kit.label({ Text = "HEALTH", Title = true, TextSize = 20, Size = UDim2.fromOffset(120, 22), Position = UDim2.fromOffset(12, 6), TextXAlignment = Enum.TextXAlignment.Left, Parent = playerPanel })
-	self.shieldLabel = Kit.label({ Text = "", TextSize = 18, TextColor3 = C.shield, Size = UDim2.fromOffset(110, 22), Position = UDim2.fromOffset(110, 6), TextXAlignment = Enum.TextXAlignment.Right, Parent = playerPanel })
-	self.hullBar = Kit.bar({ Size = UDim2.fromOffset(210, 30), Position = UDim2.fromOffset(12, 32), Color = C.hull, OverlayColor = C.shield, TextSize = 18, Parent = playerPanel })
-	self.statusLabel = Kit.label({ Text = "", TextSize = 16, TextColor3 = C.textDim, Size = UDim2.fromOffset(210, 36), Position = UDim2.fromOffset(12, 68), TextXAlignment = Enum.TextXAlignment.Left, TextWrapped = true, Parent = playerPanel })
+	local _seal, selfHolder = Kit.portrait({ Name = "SelfSeal", Size = UDim2.fromOffset(82, 82), Position = UDim2.new(0, -12, 0.5, 0), AnchorPoint = Vector2.new(0, 0.5), ZIndex = 3, Parent = playerPanel })
+	self.selfFace = Kit.new("ImageLabel", { Name = "Headshot", BackgroundColor3 = Color3.fromRGB(30, 22, 40), Size = UDim2.fromScale(1, 1), Image = Hud.portrait(Players.LocalPlayer.UserId), ZIndex = 1, Parent = selfHolder })
+	self.hullLabel = Kit.label({ Text = "", Heavy = true, TextSize = 14, TextColor3 = C.gold, Size = UDim2.fromOffset(150, 16), Position = UDim2.fromOffset(84, 8), TextXAlignment = Enum.TextXAlignment.Left, Parent = playerPanel })
+	self.shieldLabel = Kit.label({ Text = "", TextSize = 13, TextColor3 = C.shield, Size = UDim2.fromOffset(150, 16), Position = UDim2.fromOffset(84, 70), TextXAlignment = Enum.TextXAlignment.Left, Parent = playerPanel })
+	self.shieldLabel.Visible = false
+	self.hullBar = Kit.bar({ Size = UDim2.fromOffset(168, 26), Position = UDim2.fromOffset(84, 14), Color = C.hull, OverlayColor = C.shield, TextSize = 17, Parent = playerPanel })
+	self.shieldBar = Kit.bar({ Size = UDim2.fromOffset(150, 16), Position = UDim2.fromOffset(84, 50), Color = C.shield, OverlayColor = C.shield, TextSize = 12, Parent = playerPanel })
+	self.shieldBar.set(0, 1, true)
+	self.statusLabel = Kit.label({ Text = "", TextSize = 14, TextColor3 = C.textDim, Size = UDim2.fromOffset(170, 30), Position = UDim2.fromOffset(84, 74), TextXAlignment = Enum.TextXAlignment.Left, TextWrapped = true, Parent = playerPanel })
 	-- Charge slot: shows who sent it before you aim.
 	local slot = Kit.panel({ Name = "Charge", Size = UDim2.fromOffset(86, 92), Position = UDim2.new(1, -10, 0.5, 0), AnchorPoint = Vector2.new(1, 0.5), Color = C.purpleDeep, StrokeColor = C.purple, Parent = playerPanel })
 	self.chargeSlot = slot
@@ -190,7 +204,7 @@ function Hud.new(gui: Instance, onSelectSlot: (number) -> (), onLaunch: () -> ()
 			Text = "",
 			Size = UDim2.fromOffset(92, 104),
 			Position = UDim2.fromOffset((i - 1) * 100, 46),
-			Face = Color3.fromRGB(34, 30, 80),
+			Face = Color3.fromRGB(46, 40, 44),
 			Depth = 6,
 			OnActivated = function()
 				self.onSelectSlot(i)
@@ -323,6 +337,43 @@ function Hud.setContribution(self: Hud, list: { Contribution }, hp: number, maxH
 	end
 end
 
+-- The monster's bust inside the seal: a live 3D view of its model.
+function Hud.setEnemyPortrait(self: Hud, modelKey: string)
+	if modelKey == self.enemyModelKey then
+		return
+	end
+	self.enemyModelKey = modelKey
+	self.enemyFace:ClearAllChildren()
+	Kit.corner(999).Parent = self.enemyFace
+	local folder = ReplicatedStorage:FindFirstChild("MonsterModels")
+	local src = if folder then folder:FindFirstChild(modelKey) else nil
+	if not (src and src:IsA("Model")) then
+		return
+	end
+	local vp = Kit.new("ViewportFrame", {
+		Name = "Bust",
+		BackgroundColor3 = Color3.fromRGB(26, 18, 36),
+		Size = UDim2.fromScale(1, 1),
+		Ambient = Color3.fromRGB(170, 160, 200),
+		LightColor = Color3.fromRGB(255, 240, 225),
+		LightDirection = Vector3.new(-0.6, -0.8, 0.5),
+		ZIndex = 1,
+		Parent = self.enemyFace,
+	})
+	Kit.corner(999).Parent = vp
+	local m = src:Clone()
+	m.Parent = vp
+	local cf, size = m:GetBoundingBox()
+	-- The model faces -Z: look at its upper body from the front.
+	local focus = cf.Position + Vector3.new(0, size.Y * 0.22, 0)
+	local span = math.max(size.X, size.Y * 0.62)
+	local cam = Instance.new("Camera")
+	cam.FieldOfView = 30
+	cam.CFrame = CFrame.lookAt(focus + Vector3.new(span * 0.35, span * 0.12, -span * 1.95), focus)
+	cam.Parent = vp
+	vp.CurrentCamera = cam
+end
+
 function Hud.setEnemy(self: Hud, name: string, hp: number, maxHp: number, armor: number, phaseLabel: string?)
 	self.enemyName.Text = name
 	self.enemyBar.set(hp, maxHp)
@@ -338,7 +389,7 @@ function Hud.setThreat(self: Hud, title: string, detail: string, secs: number, a
 	self.threatDetail.Text = detail
 	local s = math.max(0, math.ceil(secs))
 	self.threatTime.Text = tostring(s)
-	self.threatCard.BackgroundColor3 = if armed then Color3.fromRGB(150, 36, 52) else Color3.fromRGB(60, 30, 60)
+	self.threatCard.BackgroundColor3 = if armed then Color3.fromRGB(112, 28, 26) else Color3.fromRGB(40, 22, 28)
 	self.threatTime.TextColor3 = if s <= 3 and armed then C.red else C.text
 	if s ~= self.lastThreatSecond then
 		self.lastThreatSecond = s
@@ -351,8 +402,9 @@ end
 
 function Hud.setPlayer(self: Hud, hull: number, maxHull: number, shield: number, status: string?)
 	self.hullBar.set(hull, maxHull)
-	self.hullBar.setOverlay(math.min(shield, maxHull), maxHull)
 	self.hullBar.setText(`{hull} / {maxHull}`)
+	self.shieldBar.set(math.min(shield, maxHull), maxHull)
+	self.shieldBar.setText(if shield > 0 then `SHIELD {shield}` else "no shield")
 	self.shieldLabel.Text = if shield > 0 then `SHIELD {shield}` else ""
 	self.statusLabel.Text = status or ""
 end
