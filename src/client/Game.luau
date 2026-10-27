@@ -844,7 +844,7 @@ local function setupEncounter(run: { [string]: any }, enc: { [string]: any }, in
 				if not seen("tip_aim") then
 					markSeen("tip_aim")
 					local touch = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
-					Screens.tip(if touch then "Drag on the board to aim. Every peg your ball hits powers your hero's strike." else "Aim with the mouse. Every peg your ball hits powers your hero's strike.", UDim2.fromScale(0.36, 0.55))
+					Screens.tip(if touch then "Drag on the board to aim. Every peg your ball hits powers your hero's strike." else "Aim with the mouse. Every peg your ball hits powers your hero's strike.", UDim2.fromScale(0.52, 0.36))
 				end
 			end,
 		})

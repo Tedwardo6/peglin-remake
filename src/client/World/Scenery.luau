@@ -264,6 +264,23 @@ local function buildFloor(p: ActPalette, isle: boolean)
 		local root = Build.block(setFolder, Vector3.new(0.14, h, 0.14), CFrame.new(x0 + 2.5 + i * 6.1, fy - 0.8 - h / 2, z0 + 0.06), p.accent, { material = Enum.Material.Neon, transparency = 0.2 })
 		pulseOn(root, 0.2, 0.9 + i * 0.17)
 	end
+	-- Key lights: the party and the monster must read clearly against the
+	-- dark set, so a soft lavender key from the camera side and a cool rim
+	-- from behind light the battle ledge.
+	local function lamp(pos: Vector3, at: Vector3, col: Color3, brightness: number, range: number, angle: number)
+		local host = Build.block(setFolder, Vector3.new(0.2, 0.2, 0.2), CFrame.lookAt(pos, at), col, { transparency = 1, name = "Lamp" })
+		local s = Instance.new("SpotLight")
+		s.Face = Enum.NormalId.Front
+		s.Color = col
+		s.Brightness = brightness
+		s.Range = range
+		s.Angle = angle
+		s.Shadows = false
+		s.Parent = host
+	end
+	local mid = Vector3.new(Layout.BOARD_CENTER.X + 18, fy + 3.5, c.Z - 4.5)
+	lamp(mid + Vector3.new(-6, 11, 20), mid, rgb(235, 220, 255), 3.2, 44, 55)
+	lamp(mid + Vector3.new(8, 9, -16), mid, p.glow:Lerp(rgb(255, 255, 255), 0.35), 2.2, 36, 60)
 	-- Rails along the front edge.
 	for i = 0, 7 do
 		local x = x0 + 1 + i * 4.8
