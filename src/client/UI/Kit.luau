@@ -418,11 +418,15 @@ function Kit.bar(props: Props): Bar
 		Parent = root,
 	})
 	local lastFrac = 1
+	local lastOverlay = 0
 	local bar: Bar = {
 		root = root,
 		fill = fill,
 		set = function(value: number, max: number, instant: boolean?)
 			local frac = if max > 0 then math.clamp(value / max, 0, 1) else 0
+			if frac == lastFrac and not instant then
+				return
+			end
 			if instant then
 				fill.Size = UDim2.fromScale(frac, 1)
 				ghost.Size = UDim2.fromScale(frac, 1)
@@ -441,10 +445,16 @@ function Kit.bar(props: Props): Bar
 		end,
 		setOverlay = function(value: number, max: number)
 			local frac = if max > 0 then math.clamp(value / max, 0, 1) else 0
+			if frac == lastOverlay then
+				return
+			end
+			lastOverlay = frac
 			Kit.tween(overlay, 0.18, { Size = UDim2.fromScale(frac, 1) })
 		end,
 		setText = function(t: string)
-			text.Text = t
+			if text.Text ~= t then
+				text.Text = t
+			end
 		end,
 	}
 	return bar

@@ -17,11 +17,9 @@ local C = Theme.Color
 
 local Screens = {}
 
-local gui: ScreenGui
 local layer: Frame
 
-function Screens.init(parentGui: ScreenGui, root: Frame)
-	gui = parentGui
+function Screens.init(_parentGui: ScreenGui, root: Frame)
 	layer = root
 end
 
@@ -80,7 +78,7 @@ local BADGE = {
 	wild = { text = "WILDCARD", color = C.pink },
 }
 
-local function optionText(o: DraftOption, rack: { string }): (string, string, string, Color3)
+local function optionText(o: DraftOption, _rack: { string }): (string, string, string, Color3)
 	if o.kind == "component" then
 		local c = Components.ById[o.id]
 		return c.name, c.description, c.icon, C.panelLight
@@ -89,7 +87,6 @@ local function optionText(o: DraftOption, rack: { string }): (string, string, st
 		return b.name, b.description, "●", b.color
 	else
 		local b = Balls.ById[o.id]
-		local _ = rack
 		return "Upgrade " .. b.name, `+1 damage per hit for your {b.name}.`, "▲", b.color
 	end
 end
@@ -186,7 +183,6 @@ function Screens.draft(offer: { DraftOption }, rack: { string }, rerolls: number
 	reroll.setEnabled(rerolls > 0)
 
 	local deadlineAt = 0
-	local nowRef = 0
 	local fallbackText = `If time runs out: repair {fallback} hull`
 	local running = true
 	task.spawn(function()
@@ -199,7 +195,6 @@ function Screens.draft(offer: { DraftOption }, rack: { string }, rerolls: number
 			task.wait(0.1)
 		end
 	end)
-	local _ = nowRef
 	local wrapped = m.close
 	m.close = function()
 		running = false
@@ -488,10 +483,6 @@ function Screens.waiting(onSolo: () -> ()): Waiting
 			end)
 		end,
 	}
-end
-
-local _gui = function()
-	return gui
 end
 
 return Screens

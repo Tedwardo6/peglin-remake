@@ -55,6 +55,7 @@ export type Monster = typeof(setmetatable(
 		reducedMotion: boolean,
 		mouthOpen: number,
 		hurt: number,
+		hidden: boolean,
 	},
 	Monster
 ))
@@ -91,6 +92,7 @@ function Monster.new(parent: Instance, enemyId: string, base: Vector3): Monster
 	self.reducedMotion = false
 	self.mouthOpen = 0
 	self.hurt = 0
+	self.hidden = false
 
 	local k = self.scale
 	local m = self.model
@@ -214,7 +216,13 @@ function Monster.setArmor(self: Monster, on: boolean)
 	end
 end
 
+-- Keeps the monster below its stage until a reveal starts.
+function Monster.hide(self: Monster)
+	self.hidden = true
+end
+
 function Monster.revealIn(self: Monster, seconds: number)
+	self.hidden = false
 	self.revealT = 0
 	self.reveal = seconds
 	self.mouthOpen = 1
@@ -303,7 +311,7 @@ function Monster._step(self: Monster, dt: number)
 		end
 	end
 	-- Reveal: rise from behind the pedestal with a landing squash.
-	local rise = 0
+	local rise = if self.hidden then -9 * k else 0
 	if self.revealT >= 0 then
 		self.revealT += dt
 		local u = math.clamp(self.revealT / math.max(0.2, self.reveal), 0, 1)

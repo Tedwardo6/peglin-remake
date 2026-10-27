@@ -304,7 +304,7 @@ function Hud.setPlayer(self: Hud, hull: number, maxHull: number, shield: number,
 	self.statusLabel.Text = status or ""
 end
 
-function Hud.setCharge(self: Hud, charge: { [string]: any }?, fromName: string?)
+function Hud.setCharge(self: Hud, charge: { [string]: any }?, _fromName: string?)
 	if charge then
 		local wasEmpty = self.chargeEmpty.Visible
 		self.chargeEmpty.Visible = false
@@ -315,7 +315,6 @@ function Hud.setCharge(self: Hud, charge: { [string]: any }?, fromName: string?)
 		if wasEmpty then
 			Kit.bounce(self.chargeSlot, 0.3)
 		end
-		local _ = fromName
 	else
 		self.chargeEmpty.Visible = true
 		self.chargePortrait.Visible = false

@@ -84,8 +84,8 @@ local cutsceneUntil = 0
 local lowShots = 0
 local lastAimSent = 0
 local tipsShown: { [string]: boolean } = {}
-local recentWin: { [string]: any }? = nil
-local settingsState = { reducedMotion = false, music = 0.6, sfx = 0.9, skipSeen = true }
+local pendingIntro: { [string]: any }? = nil
+local settingsState = { reducedMotion = false, music = 0.6, sfx = 0.9, skipSeen = false }
 
 local function serverNow(): number
 	return workspace:GetServerTimeNow()
@@ -164,10 +164,12 @@ local function setMonster(enemyId: string?, encId: string)
 		end
 		monster = nil
 	end
-	if enemyId and monster == nil then
-		monster = Monster.new(worldRoot, enemyId, Layout.MONSTER_BASE)
-		monsterEncId = encId;
-		(monster :: Monster.Monster).reducedMotion = settingsState.reducedMotion
+	if enemyId and not monster then
+		local m = Monster.new(worldRoot, enemyId, Layout.MONSTER_BASE)
+		m.reducedMotion = settingsState.reducedMotion
+		m:hide()
+		monster = m
+		monsterEncId = encId
 	end
 end
 
@@ -409,11 +411,9 @@ local function startLocalShot(aim: number, slot: number, loadout: Scoring.Loadou
 	local ball = Balls.ById[loadout.ballId]
 	local ta, tb = trailColors()
 	local sp: ShotPlayer.ShotPlayer
-	local comboShown = 0
 	sp = ShotPlayer.new(worldRoot, result.sim, result.outcome, ball.radius, ball.color, ball.accent, ta, tb, {
 		onHit = function(hit, _i)
 			onBoardHit(hit, sp, not isPractice, serverStart + hit.step / Config.Sim.STEP_HZ)
-			comboShown = hit.combo
 		end,
 		onWall = function(pos)
 			Audio.play("wall", { pitch = 0.9 + math.random() * 0.2 })
@@ -431,7 +431,6 @@ local function startLocalShot(aim: number, slot: number, loadout: Scoring.Loadou
 				lowShots = 0
 			end
 			finishShot()
-			local _ = comboShown
 		end,
 	})
 	shotPlayer = sp
@@ -584,16 +583,16 @@ local function setupEncounter(run: { [string]: any }, enc: { [string]: any }, in
 	enterFightView()
 	local def = Enemies.ById[enc.enemyId]
 	local remaining = enc.startAt - serverNow()
-	local isFirst = run.index == 1 and lastEncId == ""
 	local kind: "intro" | "fight" | "boss" | "leg" = if introEvent and introEvent.intro >= 3.9 and not def.boss and run.index == 1 then "intro" elseif def.boss then "boss" else "fight"
 	local cutId = "cut_" .. kind
-	local skippable = seen(cutId) and settingsState.skipSeen
+	local skippable = seen(cutId)
 	if remaining > 0.6 then
 		cutsceneUntil = os.clock() + remaining
 		Director.play({
 			kind = kind,
 			duration = math.min(5, remaining),
-			skippable = skippable or seen(cutId),
+			skippable = skippable,
+			autoSkip = skippable and settingsState.skipSeen,
 			title = string.upper(def.name),
 			sub = def.blurb,
 			color = if def.boss then C.red else C.gold,
@@ -627,8 +626,11 @@ local function setupEncounter(run: { [string]: any }, enc: { [string]: any }, in
 		})
 	else
 		Director.toFight()
+		local m = monster
+		if m then
+			m:revealIn(0.4)
+		end
 	end
-	local _ = isFirst
 	lastEncId = enc.id
 	refreshHud()
 end
@@ -664,10 +666,6 @@ local function showRunResults(run: { [string]: any })
 	local minutes = (serverNow() - run.startedAt) / 60
 	if run.mode == "test" then
 		local o = run.lastOutcome or {}
-		local bonus = 0
-		for _, pp in (o.perPlayer or {}) do
-			bonus += pp.bonusDamage
-		end
 		endModal = Screens.results(
 			string.format("TEST · %s · %s", string.upper(tostring(run.condition)), if o.won then "WON" else "LOST"),
 			rows,
@@ -681,7 +679,6 @@ local function showRunResults(run: { [string]: any })
 				Net.send("leaveRun")
 			end
 		)
-		local _ = bonus
 		return
 	end
 	endModal = Screens.results("RUN COMPLETE!", rows, squad, minutes, "REMATCH (FREE)", function()
@@ -712,9 +709,8 @@ local function onDraft(payload: { [string]: any })
 	end
 	draftOpenFor = key
 	AimInput.setEnabled(false)
-	local _, nodeIdx, node = Route.at(math.min((run :: any).index + 1, Route.count()))
+	local _, _nodeIdx, node = Route.at(math.min((run :: any).index + 1, Route.count()))
 	local title = `Next: fight {(run :: any).index + 1} of 9{if node.boss then " · BOSS" else ""}`
-	local _n = nodeIdx
 	draftModal = Screens.draft(payload.offer, rack, payload.rerolls, payload.fallback, title, function(choice, slot)
 		Net.send("pick", { choice = choice, slot = slot })
 		if draftModal then
@@ -799,7 +795,10 @@ local function onState(payload: { [string]: any })
 		return
 	end
 	if enc and enc.id ~= lastEncId and run.state == "fight" then
-		setupEncounter(run, enc, nil)
+		-- Events arrive before state, so the encounterStart details wait here.
+		local intro = pendingIntro
+		pendingIntro = nil
+		setupEncounter(run, enc, intro)
 	end
 	if run.state ~= lastRunState then
 		local prev = lastRunState
@@ -822,14 +821,7 @@ local function onEvents(list: { { [string]: any } })
 	for _, ev in list do
 		local t = ev.type
 		if t == "encounterStart" then
-			local run = runSnap
-			local enc = encSnap
-			if run and enc and (enc :: any).id ~= lastEncId then
-				setupEncounter(run :: any, enc :: any, ev)
-			elseif run and enc then
-				-- Restart of the same index: fresh encounter id arrives in state.
-				local _ = ev
-			end
+			pendingIntro = ev
 		elseif t == "threatLanding" then
 			local m = monster
 			if m then
@@ -883,7 +875,6 @@ local function onEvents(list: { { [string]: any } })
 			cabinet:cheer(2.5)
 		elseif t == "encounterWon" then
 			local mine = ev.perPlayer and ev.perPlayer[myUid]
-			recentWin = ev
 			hud:showBanner(if ev.boss then "BOSS DOWN!" else "MONSTER DOWN!", if mine then `Your biggest shot: {mine.biggestShot}` else nil, C.gold, 1.6)
 		elseif t == "lost" then
 			Audio.play("defeat")
@@ -936,7 +927,6 @@ local function onEvents(list: { { [string]: any } })
 		end
 	end
 	refreshHud()
-	local _ = recentWin
 end
 
 local function onShot(ev: { [string]: any })
@@ -986,7 +976,7 @@ local function applySettings(s: { [string]: any })
 	settingsState.reducedMotion = s.reducedMotion == true
 	settingsState.music = s.music or 0.6
 	settingsState.sfx = s.sfx or 0.9
-	settingsState.skipSeen = s.skipSeen ~= false
+	settingsState.skipSeen = s.skipSeen == true
 	Kit.Settings.reducedMotion = settingsState.reducedMotion
 	Fx.setReducedMotion(settingsState.reducedMotion)
 	cabinet.reducedMotion = settingsState.reducedMotion

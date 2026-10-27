@@ -39,6 +39,7 @@ export type Profile = {
 	},
 	familyPool: { [string]: boolean },
 	codex: { [string]: boolean }, -- items seen (knowledge unlocks)
+	kitsUsed: { [string]: boolean },
 	checkpoint: Checkpoint?,
 	rewardIds: { string }, -- repeat-safe grants (bounded)
 	firstJoin: number,
@@ -49,7 +50,7 @@ local Schema = {}
 function Schema.default(now: number): Profile
 	return {
 		version = Config.Persistence.PROFILE_VERSION,
-		settings = { reducedMotion = false, music = 0.6, sfx = 0.9, skipSeen = true },
+		settings = { reducedMotion = false, music = 0.6, sfx = 0.9, skipSeen = false },
 		seen = {},
 		unlocked = { default = true },
 		equippedTrail = "default",
@@ -66,6 +67,7 @@ function Schema.default(now: number): Profile
 		},
 		familyPool = { ricochet = true, relay = true, guard = true, wild = true },
 		codex = {},
+		kitsUsed = {},
 		checkpoint = nil,
 		rewardIds = {},
 		firstJoin = now,

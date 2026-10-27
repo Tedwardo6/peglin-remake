@@ -142,8 +142,6 @@ function WorkshopMenu.new(parent: Instance, cb: Callbacks): Menu
 			Parent = modSec,
 		})
 	end
-	local modHelp = Kit.label({ Text = "", TextSize = 13, TextColor3 = C.textDim, Size = UDim2.new(1, 0, 0, 0), ZIndex = 7, Parent = modSec })
-	local _ = modHelp
 
 	-- Ball family pool (bounded: keep at least two).
 	local famSec = section(scroll, "BALL FAMILIES IN DRAFTS (KEEP 2+)", 3, 92)
@@ -224,12 +222,11 @@ function WorkshopMenu.new(parent: Instance, cb: Callbacks): Menu
 	local testLog = Kit.label({ Text = "Same board, HP, threat, upgrade and timing in each condition.", TextSize = 13, TextColor3 = C.textDim, Size = UDim2.new(1, 0, 0, 56), Position = UDim2.fromOffset(0, 90), TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, ZIndex = 7, Parent = devSec })
 
 	-- Primary actions.
-	local play = Kit.button({ Text = "PLAY", Size = UDim2.new(0.5, -18, 0, 72), Position = UDim2.new(1, -12, 1, -12), AnchorPoint = Vector2.new(1, 1), Face = C.green, TextSize = 30, ZIndex = 7, Sound = "launch", OnActivated = function()
+	Kit.button({ Text = "PLAY", Size = UDim2.new(0.5, -18, 0, 72), Position = UDim2.new(1, -12, 1, -12), AnchorPoint = Vector2.new(1, 1), Face = C.green, TextSize = 30, ZIndex = 7, Sound = "launch", OnActivated = function()
 		cb.onPlay(choices)
 	end, Parent = frame })
 	local cont = Kit.button({ Text = "CONTINUE", Size = UDim2.new(0.5, -18, 0, 72), Position = UDim2.new(0, 12, 1, -12), AnchorPoint = Vector2.new(0, 1), Face = C.gold, TextSize = 22, ZIndex = 7, OnActivated = cb.onContinue, Parent = frame })
 	cont.root.Visible = false
-	local _p = play
 
 	local menu: Menu = {
 		frame = frame,

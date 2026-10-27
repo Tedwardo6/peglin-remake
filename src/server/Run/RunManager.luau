@@ -401,6 +401,17 @@ local function startRunFor(founders: { RunCore.Founder }, opts: {
 		local p = profileOf(f.uid)
 		if p then
 			p.stats.runsStarted += 1
+			if opts.mode == "normal" then
+				-- Progression milestones: a run with a different kit than before,
+				-- and a run with any optional challenge.
+				if next(p.kitsUsed) ~= nil and not p.kitsUsed[f.kit] then
+					funnels:mark(f.uid, "alt_kit_run", now())
+				end
+				p.kitsUsed[f.kit] = true
+				if next(opts.modifiers) ~= nil then
+					funnels:mark(f.uid, "modifier_run", now())
+				end
+			end
 		end
 	end
 	log(`run {id} started ({opts.mode}{if opts.condition then " " .. opts.condition else ""}) with {#founders} player(s)`)

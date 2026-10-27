@@ -106,8 +106,7 @@ function Workshop.build(parent: Instance): Handles
 	local stagePos = Layout.MONSTER_BASE
 	local stage = Build.cylinder(model, stagePos.Y - fy, 14, CFrame.new(Vector3.new(stagePos.X, (stagePos.Y + fy) / 2, stagePos.Z)) * CFrame.Angles(0, 0, math.rad(90)), c(70, 80, 150))
 	local rim = Build.cylinder(model, 0.6, 14.8, CFrame.new(Vector3.new(stagePos.X, stagePos.Y - 0.25, stagePos.Z)) * CFrame.Angles(0, 0, math.rad(90)), c(255, 214, 64))
-	local top = Build.cylinder(model, 0.3, 13, CFrame.new(Vector3.new(stagePos.X, stagePos.Y + 0.02, stagePos.Z)) * CFrame.Angles(0, 0, math.rad(90)), c(92, 108, 190))
-	local _ = top
+	Build.cylinder(model, 0.3, 13, CFrame.new(Vector3.new(stagePos.X, stagePos.Y + 0.02, stagePos.Z)) * CFrame.Angles(0, 0, math.rad(90)), c(92, 108, 190))
 	local stageModel = Build.model("Stage", model)
 	stage.Parent = stageModel
 	rim.Parent = stageModel
@@ -116,13 +115,11 @@ function Workshop.build(parent: Instance): Handles
 	-- Hanging lamps.
 	local lamps: { BasePart } = {}
 	for _, lx in { root.X - 14, root.X + 2, root.X + 18 } do
-		local cord = Build.block(model, Vector3.new(0.2, 8, 0.2), CFrame.new(lx, fy + 38, bz + 2), Build.INK)
-		local _c = cord
-		local shade = Build.cylinder(model, 1.6, 3.2, CFrame.new(lx, fy + 33.6, bz + 2) * CFrame.Angles(0, 0, math.rad(90)), c(255, 214, 64))
+		Build.block(model, Vector3.new(0.2, 8, 0.2), CFrame.new(lx, fy + 38, bz + 2), Build.INK)
+		Build.cylinder(model, 1.6, 3.2, CFrame.new(lx, fy + 33.6, bz + 2) * CFrame.Angles(0, 0, math.rad(90)), c(255, 214, 64))
 		local bulb = Build.ball(model, 1.4, Vector3.new(lx, fy + 32.6, bz + 2), c(255, 244, 210), { material = Enum.Material.Neon })
 		Build.light(bulb, c(255, 236, 200), 1.6, 34)
 		table.insert(lamps, bulb)
-		local _s = shade
 	end
 	-- A soft fill light in front of the cabinet so the board reads clearly.
 	local fill = Build.block(model, Vector3.new(1, 1, 1), CFrame.new(Layout.BOARD_CENTER + Vector3.new(4, 4, 18)), Color3.new(1, 1, 1), { transparency = 1 })

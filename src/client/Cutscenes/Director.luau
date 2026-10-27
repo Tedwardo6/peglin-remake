@@ -157,6 +157,7 @@ export type RevealArgs = {
 	kind: "intro" | "fight" | "boss" | "leg",
 	duration: number,
 	skippable: boolean,
+	autoSkip: boolean?,
 	title: string,
 	sub: string,
 	color: Color3,
@@ -170,6 +171,10 @@ export type RevealArgs = {
 -- Plays a cutscene of exactly `duration` seconds (or less when skipped).
 function Director.play(a: RevealArgs)
 	showSkip(a.skippable)
+	if a.autoSkip then
+		-- Seen before and the player chose to skip: reveal at once.
+		skipRequested = true
+	end
 	local finished = false
 	local function finish()
 		if finished then
@@ -177,6 +182,10 @@ function Director.play(a: RevealArgs)
 		end
 		finished = true
 		hideSkip()
+		if skipRequested then
+			-- Snap the reveal so a skipped scene still lands cleanly.
+			a.monsterReveal(0.3)
+		end
 		mode = "fight"
 		a.onDone()
 	end
