@@ -246,32 +246,28 @@ local function onBoardHit(hit: Scoring.Hit, sp: ShotPlayer.ShotPlayer?, isMine: 
 		Fx.number(pos + Vector3.new(0, 0.6, 1.2), `+{hit.heal} ♥`, C.green, 8)
 	end
 	if hit.charge and isMine then
-		local enc = encSnap
+		-- Predict the recipient the server froze at launch: yourself when solo
+		-- or in the self-charge control, else your chosen (or only) teammate.
 		local to = myUid
-		if enc then
-			local others = 0
-			for _, p in (enc :: any).players do
-				if p.uid ~= myUid and p.present and p.active then
-					others += 1
+		local enc = encSnap
+		if enc and not (runSnap and (runSnap :: any).condition == "duo_self") then
+			local mm = myMember()
+			local first: number? = nil
+			for _, tp in (enc :: any).players do
+				if tp.uid ~= myUid and tp.present and tp.active and not tp.defeated then
+					first = first or tp.uid
+					if mm and mm.recipient == tp.uid then
+						first = tp.uid
+					end
 				end
 			end
-			if others > 0 and runSnap and (runSnap :: any).condition ~= "duo_self" then
-				local mm = myMember()
-				to = if mm and mm.recipient then mm.recipient else -1
+			if first then
+				to = first
 			end
 		end
-		Fx.callout(if to == myUid then "RELAY CHARGED!" else "RELAY SENT!", C.purple, 1)
+		Fx.callout(if to == myUid then "RELAY CHARGED!" else `RELAY → {string.upper(playerName(to))}!`, C.purple, 1)
 		Audio.play("chargeSend")
 		local target = if to == myUid then hud:chargeSlotScreenPos() else (teammates:screenPos(to) or hud:chargeSlotScreenPos())
-		if to == -1 then
-			-- The recipient is resolved by the server; aim the arc at the first teammate card.
-			for _, p in (encSnap :: any).players do
-				if p.uid ~= myUid then
-					target = teammates:screenPos(p.uid) or target
-					break
-				end
-			end
-		end
 		Fx.arc(Fx.toScreen(pos), target, C.purple, 0.55, function()
 			Audio.play("chargeArrive")
 		end)

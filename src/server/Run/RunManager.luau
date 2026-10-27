@@ -38,6 +38,7 @@ type PlayerInfo = {
 	lastAimRelay: number,
 	pendingKit: string,
 	sessionLoaded: boolean,
+	pending: { { kind: string, payload: any } },
 }
 
 local RunManager = {}
@@ -787,7 +788,14 @@ end
 
 local function onRequest(player: Player, kind: any, payload: any)
 	local info = infos[player.UserId]
-	if info == nil or not info.sessionLoaded then
+	if info == nil then
+		return
+	end
+	if not info.sessionLoaded then
+		-- Hold a few early requests (e.g. "ready") until the profile loads.
+		if #info.pending < 4 and type(kind) == "string" then
+			table.insert(info.pending, { kind = kind, payload = payload })
+		end
 		return
 	end
 	if not RateLimit.allow(limiter, info.uid, os.clock()) then
@@ -846,6 +854,7 @@ local function onPlayerAdded(player: Player)
 		lastAimRelay = 0,
 		pendingKit = "ricochet",
 		sessionLoaded = false,
+		pending = {},
 	}
 	infos[uid] = info
 	-- Join is recorded at once so early exits stay in the denominator; the
@@ -866,6 +875,11 @@ local function onPlayerAdded(player: Player)
 	end
 	info.sessionLoaded = true
 	sendProfile(info)
+	local held = info.pending
+	info.pending = {}
+	for _, req in held do
+		onRequest(player, req.kind, req.payload)
+	end
 	-- A held seat from a recent disconnect is reclaimed automatically.
 	for id, run in runs do
 		local m = run.members[uid]
@@ -905,6 +919,17 @@ local function makeStore(): ProfileStore.Store
 	local ok, ds = pcall(function()
 		return DataStoreService:GetDataStore(Config.Persistence.STORE_NAME, ProfileStore.SCOPE)
 	end)
+	-- In Studio without API access every call fails with 403; detect it once
+	-- and keep profiles in memory for the session instead of retrying.
+	if ok and ds and RunService:IsStudio() then
+		local probeOk, probeErr = pcall(function()
+			return ds:GetAsync("probe")
+		end)
+		if not probeOk then
+			log(`DataStore probe failed in Studio ({probeErr})`)
+			ok = false
+		end
+	end
 	if ok and ds then
 		backend = ProfileStore.dataStoreBackend(ds)
 		backendLabel = "datastore:" .. ProfileStore.SCOPE
