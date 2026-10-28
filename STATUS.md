@@ -2,10 +2,9 @@
 
 ## Current state
 
-- **Stage:** Full loop (PR #1) and the RPG redesign first pass (PR #2) **merged into `main` on October 27, 2026 at Theodore's request.** Not published.
-- **Setup:** Rokit and Rojo 7.7.1 on Theodore's Mac; repo at `~/Documents/SeawindStudios/peglin-remake`. That folder is checked out on `main` after the merge, so Studio (with `rojo serve` running) shows the merged game.
-- **Design authority:** `ideas/co-op-pegboard-adventure/research/2026-10-27-merged-multiplayer-proposal.md` in seawind-ideas at `54167c6`, plus Theodore's redesign direction of October 27, 2026 (Peglin-style hero strikes, path map, lobby with parties and campaigns, dark fantasy + psychedelic art, 10× better monsters that animate cleanly, then a UI restyle to his iron/stone references).
-- **Next objective:** Theodore plays a full act in Studio and a 2-player test.
+- **Archived October 27, 2026.** The game now lives only in the Studio place `123038652032080`, edited directly in Studio without Rojo (Theodore's decision). This file is the final record of the Rojo era; new status goes in the seawind-ideas handoff (`ideas/co-op-pegboard-adventure/research/2026-10-27-game-state-handoff.md`).
+- **Snapshot:** this repository's `main` holds the merged full loop (PR #1) and RPG redesign (PR #2). All 58 scripts matched the place exactly at the switch.
+- **Not published.**
 
 ## Places and destinations
 

@@ -9,7 +9,7 @@ local StarterGui = game:GetService("StarterGui")
 local Config = require(ReplicatedStorage.Shared.Config)
 local Game = require(script.Parent.Game)
 
-print(`[{Config.GAME_NAME}] client started (Rojo sync OK)`)
+print(`[{Config.GAME_NAME}] client started`)
 
 -- No avatar in this game: hide the default backpack/health UI.
 pcall(function()

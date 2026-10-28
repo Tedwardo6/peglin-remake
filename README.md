@@ -1,5 +1,13 @@
 # Peglin Remake (working title)
 
+> **Archived October 27, 2026. Do not edit this repository.**
+> At Theodore's request the game now lives **only in the Studio place** (Roblox place `123038652032080`), edited directly in Studio with no Rojo. This repository is a frozen snapshot of the code on the day of the switch, kept for history. Every script in it matched the place exactly when it was frozen (58 of 58 scripts compared).
+>
+> - Current state, open issues and the next step: [seawind-ideas handoff](https://github.com/Tedwardo6/seawind-ideas/blob/main/ideas/co-op-pegboard-adventure/research/2026-10-27-game-state-handoff.md).
+> - Working rules inside the place: the `ServerStorage.README` script in Studio.
+> - Everything below describes the old Rojo workflow and is kept only as history.
+
+
 Seawind Interactive's multiplayer pachinko roguelike for Roblox. This is a private game repository. Studio standards live in the [Seawind handbook](https://github.com/Tedwardo6/seawind-handbook). Design planning lives in [seawind-ideas](https://github.com/Tedwardo6/seawind-ideas).
 
 > The working title is temporary. The shipped game will have its own name, art, characters, orbs, and relics, not Peglin's.
